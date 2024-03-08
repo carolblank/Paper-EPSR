@@ -1,56 +1,58 @@
 #using .PortfolioOptCTG
 using StatsPlots, Plots
-using Gurobi
+using HiGHS, LinearAlgebra
 
 include("src/Port_Alloc.jl");
 include("src/PortfolioOptCTG.jl");
 
-S = 1200; # Numero de cenários
-T = 12; # Numero de meses
-tx = 0; # Custo oportunidade anual
-tx_m = (1+tx)^(1/12) -1; # Custo oportunidade mensal
-#Solv = HiGHS.Optimizer # Solver
-Solv = Gurobi.Optimizer # Solver
-q = 1 / S .* ones(S) # Probabilidade dos cenarios
-pu_Money            = 1e6;
+# ------------------------ PARÂMETROS DO CASO ------------------------
+
+S         = 1200;               # Numero de cenários
+T         = 12;                 # Numero de meses
+tx        = 0;                  # Custo oportunidade anual
+tx_m      = (1+tx)^(1/12) -1;   # Custo oportunidade mensal
+Solv      = HiGHS.Optimizer    # Solver
+q         = 1 / S .* ones(S)    # Probabilidade dos cenarios
+pu_Money  = 1e6;
 
 # Leitura do PLD Newave
 dir = dirname(dirname(@__FILE__))
-PLD = Matrix(DataFrame(CSV.File("August2023/PLD.csv";header=false)))'[:,:];
-#PLD = Matrix(DataFrame(CSV.File("Monthly_Report/August2023/PLD.csv";header=false)))'[:,:];
+PLD = Matrix(DataFrame(CSV.File("March2024/PLD.csv";header=false)))'[:,:];
 
 #Leitura número de horas no mês
-h = Int.(Matrix(DataFrame(CSV.File("August2023/horas.csv";header=false)))[:,1]);
-#h = Int.(Matrix(DataFrame(CSV.File("Monthly_Report/August2023/horas.csv";header=false)))[:,1]);
+h = Int.(Matrix(DataFrame(CSV.File("March2024/horas.csv";header=false)))[:,1]);
 
-usina = ["ARINOS", "DIS"] # Usinas do caso
-#usina = ["DIS"]
-nI = length(usina) # Número de usinas do caso
-gu = zeros(S, T, nI) # Geração das usinas
-C = zeros(nI,T)
 
-GF = [50.0, 50.0 # Garantia fisica
-]; 
+# ----------------------- CADASTRO USINAS -------------------------------
+
+nI             = 2 # Número de usinas do caso
+gu             = zeros(S, T, nI) # Geração das usinas
+C              = zeros(nI,T)
+
+GF_dis         = 50.0
+GF_arinos      = 50.0
+GF             = [GF_dis, GF_arinos]
 
 TotGF = sum(GF);
 
-#Leitura geração usina HYDRO (% garantia física)
-#gu_dis = Matrix(DataFrame(CSV.File("Monthly_Report/August2023/gu_dis.csv";header=false)))'[1:S,1:T];
-gu_dis = Matrix(DataFrame(CSV.File("August2023/gu_dis.csv";header=false)))'[1:S,1:T];
+#Leitura geração
+gu_dis = Matrix(DataFrame(CSV.File("March2024/gu_dis.csv";header=false)))'[:,1:T];
+gu_dis *=30
+gu_dis /= mean(gu_dis)
 
-gu_arinos = Matrix(DataFrame(CSV.File("August2023/gu_arinos.csv";header=false)))'[1:S,1:T];
-#gu_arinos = Matrix(DataFrame(CSV.File("Monthly_Report/August2023/gu_arinos.csv";header=false)))'[1:S,1:T];
+gu_arinos = Matrix(DataFrame(CSV.File("March2024/gu_arinos.csv";header=false)))'[:,1:T];
+gu_arinos *=30;
+gu_arinos /= mean(gu_arinos);
 
-gu_hydro = Matrix(DataFrame(CSV.File("August2023/gu_hydro.csv";header=false)))'[1:S,1:T];
-#gu_hydro = Matrix(DataFrame(CSV.File("Monthly_Report/August2023/gu_hydro.csv";header=false)))'[1:S,1:T];
-
-gu = ones(S,T,nI)
-gu[:,:,1] = gu_arinos;
-gu[:,:,2] = gu_dis;
-#gu[:,:,3] = gu_hydro;
+gu = ones(2000,T,nI);
+gu[:,:,1] = gu_dis;
+gu[:,:,2] = gu_arinos;
 
 ymax = ones(nI); # Porcentagem máxima da geração das usinas contratadas
 ymin = ones(nI); # Porcentagem minima da geração das usinas contratada
+
+
+# ----------------------- CADASTRO CONTRATOS -------------------------------
 
 J = 13 # Número de contratos
 Qmax = sum(GF[i] for i = 1:nI);
@@ -76,17 +78,19 @@ for j in 1:T
 end
 
 global gammax = 0.2;
-xmax = ones(J)*gammax; # Porcentagem maxima de contratação 
-xmin = ones(J).*-gammax;
-xmax[1] = 1.0; # Porcentagem minima de contratação
-xmin[1] = 0.0; # Porcentagem minima de contratação
+xmax     = ones(J)*gammax; # Porcentagem maxima de contratação 
+xmin     = ones(J).*-gammax;
+xmax[1]  = 1.0; # Porcentagem minima de contratação
+xmin[1]  = 0.0; # Porcentagem minima de contratação
 
-α = 0.95 # Percentil CVaR Risco
 
-flag_restricao = false # Boolean restrição receita minima
-Rmin = ones(T)*(0.0); # Receita minima
+# ----------------------- PARÂMETROS DE RISCO -------------------------------
 
-J = 1;
+α                = 0.95 # Percentil CVaR Risco
+flag_restricao   = false # Boolean restrição receita minima
+Rmin             = ones(T)*(0.0); # Receita minima
+
+
 
 # ================================================================= #
 #                          Run Omega Model                          #
@@ -167,7 +171,7 @@ R_otimo_proposto_mensal = R_otimo_mensal./γ_otimo;
 
 
 #
-    # ---> Compute Statistics <---
+    # ---> MODELO TREINADO - Compute Statistics UPSIDE <---
 #
 
 Set_Quant       = [0.01 ; 0.05 ; 0.10 ; 0.25 ; 0.50 ; 0.75 ; 0.90 ; 0.95 ; 0.99];
@@ -185,6 +189,30 @@ end
 Avg_Prop        = mean(R_otimo_proposto);
 CVaR_Prop       = Statistics.mean(sort(R_otimo_proposto)[1:Int(round((1 - α) * S)), :]);
 
+
+#
+    # ---> MODELO TESTE - Compute Statistics UPSIDE <---
+#
+
+S_Test  = 800
+R_teste_upside = zeros(S_Test)
+
+for s in 1:S_Test
+    R_teste_upside[s] = sum(sum(gu[s+1200, t, i] * GF[i] * PLD[s+1200, t] * h[t] for i in 1:nI) 
+                        + sum((P[j, t] - PLD[s+1200, t]) * Q[j, t] * x_novo[j] * h[t] for j in 1:J) for t in 1:T)./1e6;
+end
+
+global iter_q   = 1;
+
+Quant_Prop_Test      = zeros(1, nQuant);
+
+for q_ ∈ Set_Quant
+    Quant_Prop_Test[iter_q] = sort(R_teste_upside)[Int(round(q_*S_Test))];
+    global iter_q   = iter_q + 1;
+end
+
+Avg_Prop_Test        = mean(R_teste_upside);
+CVaR_Prop_Test       = Statistics.mean(sort(R_teste_upside)[1:Int(round((1 - α) * S_Test)), :]);
 
 # ================================================================= #
 
@@ -232,6 +260,43 @@ for λ_ ∈ Set_Λ
 
 end;
 
+#
+    # ---> MODELO TESTE - Compute Statistics RISK-REWARD <---
+#
+
+S_Test  = 800
+R_teste_RR = zeros(n_Λ, S_Test)
+
+global iter_λ          = 1;
+global iter_q          = 1;
+
+Quant_RR_Test        = zeros(n_Λ, nQuant);
+Avg_RR_Test          = zeros(n_Λ);
+CVaR_RR_Test         = zeros(n_Λ);
+
+for λ_ ∈ Set_Λ
+    println("\n");
+    println("λ = ", λ_);
+    println("\n");
+
+    for s in 1:S_Test
+        R_teste_RR[iter_λ, s] = sum(sum(gu[s+1200, t, i] * GF[i] * PLD[s+1200, t] * h[t] for i in 1:nI) 
+                        + sum((P[j, t] - PLD[s+1200, t]) * Q[j, t] * xOptimal_RR[iter_λ, j] * h[t] for j in 1:J) for t in 1:T);
+    end
+
+    for q_ ∈ Set_Quant
+        Quant_RR_Test[iter_λ, iter_q]    = sort(R_teste_RR[iter_λ, :])[Int(round(q_*S_Test))]/pu_Money;
+        Avg_RR_Test[iter_λ]              = mean(R_teste_RR[iter_λ, :])/pu_Money;
+        CVaR_RR_Test[iter_λ]             = Statistics.mean(sort(R_teste_RR[iter_λ, :])[1:Int(round((1 - α) * S_Test)), :])/pu_Money;
+
+        global iter_q = iter_q + 1;
+    end;
+
+    global iter_q = 1;
+    global iter_λ = iter_λ + 1;
+
+end;
+
 # ================================================================= #
 
 # ================================================================= #
@@ -239,7 +304,7 @@ end;
 # ================================================================= #
 
 #
-    # ---> Create DataFrames <---
+    # ---> Create DataFrames TREINADO <---
 #
 
 xMat    = round.([xOptimal_RR ; x_novo'].*100, digits = 2);
@@ -264,6 +329,19 @@ println("\n");
 print(q_df);
 println("\n\n\n");
 
+
+#
+    # ---> Create DataFrames TESTE <---
+#
+
+
+
+
+# ================================================================= #
+
+# ================================================================= #
+#                      Plots                      #
+# ================================================================= #
 
 #
     # ---> Plot: Inverse Cumulative Distribution <---
