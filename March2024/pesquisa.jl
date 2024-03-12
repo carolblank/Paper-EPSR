@@ -11,7 +11,7 @@ S         = 1200;               # Numero de cenários
 T         = 12;                 # Numero de meses
 tx        = 0;                  # Custo oportunidade anual
 tx_m      = (1+tx)^(1/12) -1;   # Custo oportunidade mensal
-Solv      = HiGHS.Optimizer    # Solver
+Solv      = HiGHS.Optimizer     # Solver
 q         = 1 / S .* ones(S)    # Probabilidade dos cenarios
 pu_Money  = 1e6;
 
@@ -54,34 +54,29 @@ ymin = ones(nI); # Porcentagem minima da geração das usinas contratada
 
 # ----------------------- CADASTRO CONTRATOS -------------------------------
 
-J = 13 # Número de contratos
-Qmax = sum(GF[i] for i = 1:nI);
-Q = ones(J,T);
-Q[1,:] .= Qmax;
-Q[2:13,:] .= LinearAlgebra.I(12).*Qmax;
+J           = 13                         # Número de contratos
+Qmax        = sum(GF[i] for i = 1:nI);   # Definição quantidade máxima
+Q           = ones(J,T);                 # Vetor Q
+Q[1,:]     .= Qmax;                      # Contrato A+1
+Q[2:13,:]  .= LinearAlgebra.I(12).*Qmax; # Contratos M+1
 
-P = ones(J, T);
+P           = ones(J, T);                # Vetor P
 
-a_Y = 0.93;
-b_Y = 15.31;
+a_Y         = 0.93;                      # Coeficiente angular p/ definição do preço
+b_Y         = 15.31;                     # Coeficiente linear p/ definição do preço
+P[1,:]     .= a_Y*mean(PLD[1:S,1:T]) + b_Y;
 
-P[1,:] .= a_Y*mean(PLD[1:S,1:T]) + b_Y;
+PLD_mensal  = Statistics.mean(PLD, dims = 1);
+a_M         = a_Y;
+b_M         = b_Y;
+P[2:end, :] .= (a_M .* PLD_mensal .+ b_M) .* LinearAlgebra.I(T)
 
-media_m = zeros(T);
-media_m = Statistics.mean(PLD, dims = 1);
-
-a_M = a_Y;
-b_M = b_Y;
-
-for j in 1:T
-    P[j+1,:] .= LinearAlgebra.I(T)[j,:].*(a_M.*media_m[j] + b_M);
-end
 
 global gammax = 0.2;
-xmax     = ones(J)*gammax; # Porcentagem maxima de contratação 
-xmin     = ones(J).*-gammax;
-xmax[1]  = 1.0; # Porcentagem minima de contratação
-xmin[1]  = 0.0; # Porcentagem minima de contratação
+xmax     = ones(J)*gammax;      # Porcentagem maxima de contratação mensal
+xmin     = ones(J).*-gammax;    # Porcentagem mínima de contratação mensal
+xmax[1]  = 1.0;                 # Porcentagem maxima de contratação anual
+xmin[1]  = 0.0;                 # Porcentagem minima de contratação anual
 
 
 # ----------------------- PARÂMETROS DE RISCO -------------------------------
@@ -92,9 +87,9 @@ Rmin             = ones(T)*(0.0); # Receita minima
 
 
 
-# ================================================================= #
-#                          Run Omega Model                          #
-# ================================================================= #
+# =========================================================================== #
+#                               Run Omega Model                               #
+# =========================================================================== #
 
 #
     # ---> Defining τ/L <---
@@ -111,9 +106,7 @@ L = cvar/pu_Money;
 #L = avg_adj/pu_Money;
 h_ = h./pu_Money;
 
-#
-    # ---> Solving Proposed Model <---
-#
+# ----------------------- SOLVING PROPOSED MODEL -------------------------------
 
 # EXPERIMENTO UPSIDE
 model = Model(Solv)
@@ -170,31 +163,25 @@ R_otimo_proposto = R_otimo./γ_otimo;
 R_otimo_proposto_mensal = R_otimo_mensal./γ_otimo;
 
 
-#
-    # ---> MODELO TREINADO - Compute Statistics UPSIDE <---
-#
+
+# ----------------------- MODELO ***UPSIDE*** TREINADO - Compute Statistics -------------------------------
+
 
 Set_Quant       = [0.01 ; 0.05 ; 0.10 ; 0.25 ; 0.50 ; 0.75 ; 0.90 ; 0.95 ; 0.99];
 nQuant          = length(Set_Quant);
-
-global iter_q   = 1;
-
 Quant_Prop      = zeros(1, nQuant);
 
-for q_ ∈ Set_Quant
+for (iter_q, q_) ∈ enumerate(Set_Quant)
     Quant_Prop[iter_q] = sort(R_otimo_proposto)[Int(round(q_*S))];
-    global iter_q   = iter_q + 1;
 end
 
 Avg_Prop        = mean(R_otimo_proposto);
 CVaR_Prop       = Statistics.mean(sort(R_otimo_proposto)[1:Int(round((1 - α) * S)), :]);
 
 
-#
-    # ---> MODELO TESTE - Compute Statistics UPSIDE <---
-#
+# ----------------------- MODELO ***UPSIDE*** TESTE - Compute Statistics -------------------------------
 
-S_Test  = 800
+S_Test         = 800
 R_teste_upside = zeros(S_Test)
 
 for s in 1:S_Test
@@ -202,29 +189,25 @@ for s in 1:S_Test
                         + sum((P[j, t] - PLD[s+1200, t]) * Q[j, t] * x_novo[j] * h[t] for j in 1:J) for t in 1:T)./1e6;
 end
 
-global iter_q   = 1;
-
 Quant_Prop_Test      = zeros(1, nQuant);
 
-for q_ ∈ Set_Quant
+for (iter_q, q_) ∈ enumerate(Set_Quant)
     Quant_Prop_Test[iter_q] = sort(R_teste_upside)[Int(round(q_*S_Test))];
-    global iter_q   = iter_q + 1;
 end
 
 Avg_Prop_Test        = mean(R_teste_upside);
 CVaR_Prop_Test       = Statistics.mean(sort(R_teste_upside)[1:Int(round((1 - α) * S_Test)), :]);
 
-# ================================================================= #
 
-# ================================================================= #
-#                       Run Risk-Reward Model                       #
-# ================================================================= #
+
+
+# =========================================================================== #
+#                               Run Risk-Reward Model                         #
+# =========================================================================== #
+
 
 Set_Λ           = [0.00 ; 0.05 ; 0.10 ; 0.35 ; 0.50 ; 0.75 ; 0.90 ; 0.95 ; 0.99];
 n_Λ             = length(Set_Λ);
-
-#Set_Quant       = [0.01 ; 0.05 ; 0.10 ; 0.25 ; 0.50 ; 0.75 ; 0.90 ; 0.95 ; 0.99];
-#nQuant          = length(Set_Quant);
 
 global Rdisp_RR        = zeros(n_Λ, S, T, nI);
 global Rquant_RR       = zeros(n_Λ, S, T, J);
@@ -232,49 +215,42 @@ global RPort_RR        = zeros(n_Λ, S, T);
 global RPortTot_RR     = zeros(n_Λ, S);
 global xOptimal_RR     = zeros(n_Λ, J);
 global yOptimal_RR     = zeros(n_Λ, nI);
-global iter_λ          = 1;
-global iter_q          = 1;
 
 Quant_RR        = zeros(n_Λ, nQuant);
 Avg_RR          = zeros(n_Λ);
 CVaR_RR         = zeros(n_Λ);
 
-for λ_ ∈ Set_Λ
+for (iter_λ, λ_) ∈ enumerate(Set_Λ)
     println("\n");
     println("λ = ", λ_);
     println("\n");
 
     global params = ParametrosContratacao(gu, GF, h, Q, PLD, α, T, λ_, flag_restricao, Rmin, P, S, q, nI, J, C, tx_m, xmin, xmax, ymin, ymax, Solv);
     Rdisp_RR[iter_λ, :, :, :], Rquant_RR[iter_λ, :, :, :], RPort_RR[iter_λ, :, :], RPortTot_RR[iter_λ, :], xOptimal_RR[iter_λ, :], yOptimal_RR[iter_λ, :] = port_alloc(params);
+    
+    # ----------------------- MODELO ***RISK-REWARD*** TREINADO - Compute Statistics -------------------------------
 
-    for q_ ∈ Set_Quant
+    for (iter_q, q_) ∈ enumerate(Set_Quant)
         Quant_RR[iter_λ, iter_q]    = sort(RPortTot_RR[iter_λ, :])[Int(round(q_*S))]/pu_Money;
         Avg_RR[iter_λ]              = mean(RPortTot_RR[iter_λ, :])/pu_Money;
         CVaR_RR[iter_λ]             = Statistics.mean(sort(RPortTot_RR[iter_λ, :])[1:Int(round((1 - α) * S)), :])/pu_Money;
 
-        global iter_q = iter_q + 1;
     end;
-
-    global iter_q = 1;
-    global iter_λ = iter_λ + 1;
 
 end;
 
-#
-    # ---> MODELO TESTE - Compute Statistics RISK-REWARD <---
-#
+
+# ----------------------- MODELO ***RISK-REWARD*** TESTE - Compute Statistics -------------------------------
+
 
 S_Test  = 800
 R_teste_RR = zeros(n_Λ, S_Test)
-
-global iter_λ          = 1;
-global iter_q          = 1;
 
 Quant_RR_Test        = zeros(n_Λ, nQuant);
 Avg_RR_Test          = zeros(n_Λ);
 CVaR_RR_Test         = zeros(n_Λ);
 
-for λ_ ∈ Set_Λ
+for (iter_λ, λ_) ∈ enumerate(Set_Λ)
     println("\n");
     println("λ = ", λ_);
     println("\n");
@@ -284,18 +260,15 @@ for λ_ ∈ Set_Λ
                         + sum((P[j, t] - PLD[s+1200, t]) * Q[j, t] * xOptimal_RR[iter_λ, j] * h[t] for j in 1:J) for t in 1:T);
     end
 
-    for q_ ∈ Set_Quant
+    for (iter_q, q_) ∈ enumerate(Set_Quant)
         Quant_RR_Test[iter_λ, iter_q]    = sort(R_teste_RR[iter_λ, :])[Int(round(q_*S_Test))]/pu_Money;
         Avg_RR_Test[iter_λ]              = mean(R_teste_RR[iter_λ, :])/pu_Money;
         CVaR_RR_Test[iter_λ]             = Statistics.mean(sort(R_teste_RR[iter_λ, :])[1:Int(round((1 - α) * S_Test)), :])/pu_Money;
 
-        global iter_q = iter_q + 1;
     end;
 
-    global iter_q = 1;
-    global iter_λ = iter_λ + 1;
-
 end;
+
 
 # ================================================================= #
 
@@ -303,12 +276,11 @@ end;
 #                      Structuring the Results                      #
 # ================================================================= #
 
-#
-    # ---> Create DataFrames TREINADO <---
-#
+# ----------------------- Create DataFrames TREINADO -------------------------------
 
 xMat    = round.([xOptimal_RR ; x_novo'].*100, digits = 2);
 x_df    = DataFrame(xMat, :auto);
+column_titles = ["Avg", "CVaR", "q 1%", "q 5%", "q 10%", "q 25%", "q 50%", "q 75%", "q 90%", "q 95%", "q 99%"]
 
 println("\n\n");
 println(" --> Contracting Levels <-- ");
@@ -322,25 +294,38 @@ CVaRMat = [CVaR_RR ; CVaR_Prop];
 
 qMat    = [AvgMat CVaRMat qMat];
 q_df    = DataFrame(qMat, :auto);
+q_df = DataFrame(qMat, Symbol.(column_titles))
 
 println("\n\n");
-println(" --> Quantile Levels <-- ");
+println(" --> Quantile Levels - in-sample <-- ");
 println("\n");
 print(q_df);
 println("\n\n\n");
 
 
-#
-    # ---> Create DataFrames TESTE <---
-#
+# ----------------------- Create DataFrames TESTE -------------------------------
 
 
+qMat_Test    = [Quant_RR_Test ; Quant_Prop_Test];
+AvgMat_Test  = [Avg_RR_Test ; Avg_Prop_Test];
+CVaRMat_Test = [CVaR_RR_Test ; CVaR_Prop_Test];
+
+qMat_Test    = [AvgMat_Test CVaRMat_Test qMat_Test];
+q_df_Test    = DataFrame(qMat_Test, :auto);
+
+q_df_Test = DataFrame(qMat_Test, Symbol.(column_titles))
+
+println("\n\n");
+println(" --> Quantile Levels - out-of-sample <-- ");
+println("\n");
+print(q_df_Test);
+println("\n\n\n");
 
 
 # ================================================================= #
 
 # ================================================================= #
-#                      Plots                      #
+#                      Plots                                        #
 # ================================================================= #
 
 #
@@ -351,162 +336,172 @@ s_linewidth         = 2;
 pos_Neut            = 1;
 pos_Aver            = 4;
 λ_plot              = Set_Λ[pos_Aver];
-
-delta = 10;
-min_xlim = Int(round(min(minimum(R_otimo_proposto), 
-            minimum(RPortTot_RR[pos_Aver, :]./pu_Money), 
-            minimum(RPortTot_RR[pos_Neut, :]./pu_Money)
-)/10, digits = 0)*10) - delta;
-
-max_xlim = Int(round(max(maximum(R_otimo_proposto), 
-            maximum(RPortTot_RR[pos_Aver, :]./pu_Money), 
-            maximum(RPortTot_RR[pos_Neut, :]./pu_Money)
-)/10, digits = 0)*10) + delta;
-
-p = plot();
-
-R_Prop_Sort         = sort(R_otimo_proposto);
-
-p = plot!((1:S)./S, R_Prop_Sort, ylims = (min_xlim,max_xlim), labels = "Proposed approach",
-            legend = :topleft, color=:blue, xlabel="Inverse Cumulative Probability",
-            xticks = 0.0:0.1:1.0,
-            yticks = min_xlim:10:max_xlim,
-            ylabel = "Revenue MMR\$",
-            linewidth = s_linewidth
-);
-
-R_RR_Sort_Neut      = sort(RPortTot_RR[pos_Neut, :]);
-
-p = plot!((1:S)./S, R_RR_Sort_Neut./pu_Money, 
-            color = :black, 
-            labels = "Risk-Neutral", 
-            linewidth = s_linewidth,
-            line=(:dot, 3)
-);
-
-R_RR_Sort_Aver      = sort(RPortTot_RR[pos_Aver, :]);
-
-p = plot!((1:S)./S, R_RR_Sort_Aver./pu_Money, 
-            color = :gray, 
-            labels = string("Risk-Averse (λ = ", λ_plot, ")"),
-            linewidth = s_linewidth,
-            ls=:dash
-);
-
-display(p);
-Plots.savefig(p, "InvDistAcum_Full.png");
-
-#
-    # ---> Plot: Inverse Cumulative Distribution -- Downside Region <---
-#
-
+delta               = 10;
 α_d = 0.20;
-Sd = Int(round(S*α_d));
 
-delta = 5;
+function inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
+                        R_otimo_proposto, RPortTot_RR, pu_Money, α_d, S)
 
-min_xlim = Int(round(min(minimum(R_Prop_Sort[1:Sd]), 
-            minimum(R_RR_Sort_Aver[1:Sd]./pu_Money), 
-            minimum(R_RR_Sort_Neut[1:Sd]./pu_Money)
-)/10, digits = 0)*10) - delta;
+    Sd = Int(round(S*α_d));
 
-max_xlim = Int(round(max(maximum(R_Prop_Sort[1:Sd]), 
-            maximum(R_RR_Sort_Aver[1:Sd]./pu_Money), 
-            maximum(R_RR_Sort_Neut[1:Sd]./pu_Money)
-)/10, digits = 0)*10) + delta;
+    min_xlim = Int(round(min(minimum(R_otimo_proposto), 
+                minimum(RPortTot_RR[pos_Aver, :]./pu_Money), 
+                minimum(RPortTot_RR[pos_Neut, :]./pu_Money)
+    )/10, digits = 0)*10) - delta;
 
-p = plot();
+    max_xlim = Int(round(max(maximum(R_otimo_proposto), 
+                maximum(RPortTot_RR[pos_Aver, :]./pu_Money), 
+                maximum(RPortTot_RR[pos_Neut, :]./pu_Money)
+    )/10, digits = 0)*10) + delta;
 
-R_Prop_Sort         = sort(R_otimo_proposto);
+    p = plot();
 
-x_axis__            = 0:0.2/239:α_d;
+    R_Prop_Sort         = sort(R_otimo_proposto);
 
-p = plot!(x_axis__, R_Prop_Sort[1:Sd], ylims = (min_xlim,max_xlim), labels = "Proposed approach",
-            legend = :bottomright, color=:blue, xlabel="Inverse Cumulative Probability",
-            xlims = (0.00,(α_d+0.01)),
-            xticks = 0.00:0.02:α_d,
-            #yticks = min_xlim:50:max_xlim,
-            ylabel = "Revenue MMR\$",
-            linewidth = s_linewidth
-);
+    p = plot!((1:S)./S, R_Prop_Sort, ylims = (min_xlim,max_xlim), labels = "Proposed approach",
+                legend = :topleft, color=:blue, xlabel="Inverse Cumulative Probability",
+                xticks = 0.0:0.1:1.0,
+                yticks = min_xlim:10:max_xlim,
+                ylabel = "Revenue MMR\$",
+                linewidth = s_linewidth
+    );
 
-R_RR_Sort_Neut      = sort(RPortTot_RR[pos_Neut, :]);
+    R_RR_Sort_Neut      = sort(RPortTot_RR[pos_Neut, :]);
 
-p = plot!(x_axis__, R_RR_Sort_Neut[1:Sd]./pu_Money, 
-            color = :black, 
-            labels = "Risk-Neutral", 
-            linewidth = s_linewidth,
-            line=(:dot, 3)
-);
+    p = plot!((1:S)./S, R_RR_Sort_Neut./pu_Money, 
+                color = :black, 
+                labels = "Risk-Neutral", 
+                linewidth = s_linewidth,
+                line=(:dot, 3)
+    );
 
-R_RR_Sort_Aver      = sort(RPortTot_RR[pos_Aver, :]);
+    R_RR_Sort_Aver      = sort(RPortTot_RR[pos_Aver, :]);
 
-p = plot!(x_axis__, R_RR_Sort_Aver[1:Sd]./pu_Money, 
-            color = :gray, 
-            labels = string("Risk-Averse (λ = ", λ_plot, ")"),
-            linewidth = s_linewidth,
-            ls=:dash
-);
+    p = plot!((1:S)./S, R_RR_Sort_Aver./pu_Money, 
+                color = :gray, 
+                labels = string("Risk-Averse (λ = ", λ_plot, ")"),
+                linewidth = s_linewidth,
+                ls=:dash
+    );
 
-display(p);
-Plots.savefig(p, "InvDistAcum_DownSide.png");
+    display(p);
+    Plots.savefig(p, "InvDistAcum_Full.png");
 
-#
-    # ---> Plot: Inverse Cumulative Distribution -- Upside Region <---
-#
+    #
+        # ---> Plot: Inverse Cumulative Distribution -- Downside Region <---
+    #
 
-#α_d = 0.3;
-#Sd = Int(round(S*α_d));
+    delta = 5;
 
-p = plot();
+    min_xlim = Int(round(min(minimum(R_Prop_Sort[1:Sd]), 
+                minimum(R_RR_Sort_Aver[1:Sd]./pu_Money), 
+                minimum(R_RR_Sort_Neut[1:Sd]./pu_Money)
+    )/10, digits = 0)*10) - delta;
 
-delta = 5;
+    max_xlim = Int(round(max(maximum(R_Prop_Sort[1:Sd]), 
+                maximum(R_RR_Sort_Aver[1:Sd]./pu_Money), 
+                maximum(R_RR_Sort_Neut[1:Sd]./pu_Money)
+    )/10, digits = 0)*10) + delta;
 
-min_xlim = Int(round(min(minimum(R_Prop_Sort[S-Sd+1:S]), 
-            minimum(R_RR_Sort_Aver[S-Sd+1:S]./pu_Money), 
-            minimum(R_RR_Sort_Neut[S-Sd+1:S]./pu_Money)
-)/10, digits = 0)*10) - delta;
+    p = plot();
 
-max_xlim = Int(round(max(maximum(R_Prop_Sort[S-Sd+1:S]), 
-            maximum(R_RR_Sort_Aver[S-Sd+1:S]./pu_Money), 
-            maximum(R_RR_Sort_Neut[S-Sd+1:S]./pu_Money)
-)/10, digits = 0)*10) + delta;
+    R_Prop_Sort         = sort(R_otimo_proposto);
 
-R_Prop_Sort         = sort(R_otimo_proposto);
-x_axis__            = (1 - α_d):0.2/239:1;
+    x_axis__            = 0:0.2/(Sd-1):α_d;
 
-#p = plot!((1:Sd)./Sd, R_Prop_Sort[S-Sd+1:S], 
-p = plot!(x_axis__, R_Prop_Sort[S-Sd+1:S], 
-            ylims = (min_xlim,max_xlim), 
-            labels = "Proposed approach",
-            legend = :topleft, color=:blue, xlabel="Inverse Cumulative Probability",
-            xlims = ((1-α_d),1),
-            xticks = (1-α_d):0.02:1,
-            yticks = min_xlim:10:max_xlim,
-            ylabel = "Revenue MMR\$",
-            linewidth = s_linewidth
-);
+    p = plot!(x_axis__, R_Prop_Sort[1:Sd], ylims = (min_xlim,max_xlim), labels = "Proposed approach",
+                legend = :bottomright, color=:blue, xlabel="Inverse Cumulative Probability",
+                xlims = (0.00,(α_d+0.01)),
+                xticks = 0.00:0.02:α_d,
+                ylabel = "Revenue MMR\$",
+                linewidth = s_linewidth
+    );
 
-R_RR_Sort_Neut      = sort(RPortTot_RR[pos_Neut, :]);
+    R_RR_Sort_Neut      = sort(RPortTot_RR[pos_Neut, :]);
 
-p = plot!(x_axis__, R_RR_Sort_Neut[S-Sd+1:S]./pu_Money, 
-            color = :black, 
-            labels = "Risk-Neutral", 
-            linewidth = s_linewidth,
-            line=(:dot, 3)
-);
+    p = plot!(x_axis__, R_RR_Sort_Neut[1:Sd]./pu_Money, 
+                color = :black, 
+                labels = "Risk-Neutral", 
+                linewidth = s_linewidth,
+                line=(:dot, 3)
+    );
 
-R_RR_Sort_Aver      = sort(RPortTot_RR[pos_Aver, :]);
+    R_RR_Sort_Aver      = sort(RPortTot_RR[pos_Aver, :]);
 
-p = plot!(x_axis__, R_RR_Sort_Aver[S-Sd+1:S]./pu_Money, 
-            color = :gray, 
-            labels = string("Risk-Averse (λ = ", λ_plot, ")"),
-            linewidth = s_linewidth,
-            ls=:dash
-);
+    p = plot!(x_axis__, R_RR_Sort_Aver[1:Sd]./pu_Money, 
+                color = :gray, 
+                labels = string("Risk-Averse (λ = ", λ_plot, ")"),
+                linewidth = s_linewidth,
+                ls=:dash
+    );
 
-display(p);
-Plots.savefig(p, "InvDistAcum_Upside.png");
+    display(p);
+    Plots.savefig(p, "InvDistAcum_DownSide.png");
+
+    #
+        # ---> Plot: Inverse Cumulative Distribution -- Upside Region <---
+    #
+
+    p = plot();
+
+    delta = 5;
+
+    min_xlim = Int(round(min(minimum(R_Prop_Sort[S-Sd+1:S]), 
+                minimum(R_RR_Sort_Aver[S-Sd+1:S]./pu_Money), 
+                minimum(R_RR_Sort_Neut[S-Sd+1:S]./pu_Money)
+    )/10, digits = 0)*10) - delta;
+
+    max_xlim = Int(round(max(maximum(R_Prop_Sort[S-Sd+1:S]), 
+                maximum(R_RR_Sort_Aver[S-Sd+1:S]./pu_Money), 
+                maximum(R_RR_Sort_Neut[S-Sd+1:S]./pu_Money)
+    )/10, digits = 0)*10) + delta;
+
+    R_Prop_Sort         = sort(R_otimo_proposto);
+    x_axis__            = (1 - α_d):0.2/239:1;
+
+
+    p = plot!(x_axis__, R_Prop_Sort[S-Sd+1:S], 
+                ylims = (min_xlim,max_xlim), 
+                labels = "Proposed approach",
+                legend = :topleft, color=:blue, xlabel="Inverse Cumulative Probability",
+                xlims = ((1-α_d),1),
+                xticks = (1-α_d):0.02:1,
+                yticks = min_xlim:10:max_xlim,
+                ylabel = "Revenue MMR\$",
+                linewidth = s_linewidth
+    );
+
+    R_RR_Sort_Neut      = sort(RPortTot_RR[pos_Neut, :]);
+
+    p = plot!(x_axis__, R_RR_Sort_Neut[S-Sd+1:S]./pu_Money, 
+                color = :black, 
+                labels = "Risk-Neutral", 
+                linewidth = s_linewidth,
+                line=(:dot, 3)
+    );
+
+    R_RR_Sort_Aver      = sort(RPortTot_RR[pos_Aver, :]);
+
+    p = plot!(x_axis__, R_RR_Sort_Aver[S-Sd+1:S]./pu_Money, 
+                color = :gray, 
+                labels = string("Risk-Averse (λ = ", λ_plot, ")"),
+                linewidth = s_linewidth,
+                ls=:dash
+    );
+
+    display(p);
+    Plots.savefig(p, "InvDistAcum_Upside.png");
+
+    return
+
+end
+
+inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
+    R_otimo_proposto, RPortTot_RR, pu_Money, α_d, S)
+
+
+inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
+                R_otimo_proposto, RPortTot_RR, pu_Money, α_d, S_Test)
 
 
 #
@@ -536,17 +531,14 @@ p_energy = plot();
 
 p_energy = groupedbar!(
     contrato,
-    #bar_position = :dodge,
     color = ["black" "gray" "blue"],
     linecolor = :white,
     fillalpha = [0.9 0.9 0.9],
     label = ["Risk-Neutral" string("Risk-Averse (λ = ", λ_plot, ")") "Proposed Approach"],
-    #xticks = 1:1:12,
     xlabel = "Bussiness Periods (Months)",
     ylabel = "Energy (avgMW)",
     ylims = (50,300),
     legend = :bottomright,
-    #bar_width = 0.80,
     linewidth = 1,
     x_foreground_color_border = :white
 );
@@ -572,7 +564,6 @@ p_energy = violin!(
     xticks = 1:1:12,
     x_foreground_color_border = :white,
     xlabel = "Bussiness Periods (Months)",
-    #ylabel = "Energy Generation (MW)",
     fillalpha=[lev_fillalpha lev_fillalpha lev_fillalpha],
     label = ["Renewable Production" false false false false false false false false false false false false],
     linecolor = nothing
