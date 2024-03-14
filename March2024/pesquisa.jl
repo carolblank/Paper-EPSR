@@ -54,7 +54,7 @@ ymin = ones(nI); # Porcentagem minima da geração das usinas contratada
 
 # ----------------------- CADASTRO CONTRATOS -------------------------------
 
-J           = 13                         # Número de contratos
+J           = 1                         # Número de contratos
 Qmax        = sum(GF[i] for i = 1:nI);   # Definição quantidade máxima
 Q           = ones(J,T);                 # Vetor Q
 Q[1,:]     .= Qmax;                      # Contrato A+1
@@ -497,11 +497,11 @@ function inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
 end
 
 inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
-    R_otimo_proposto, RPortTot_RR, pu_Money, α_d, S)
+                R_otimo_proposto, RPortTot_RR, pu_Money, α_d, S)
 
 
 inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
-                R_otimo_proposto, RPortTot_RR, pu_Money, α_d, S_Test)
+                R_teste_upside, R_teste_RR, pu_Money, α_d, S_Test)
 
 
 #
