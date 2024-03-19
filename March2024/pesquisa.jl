@@ -54,11 +54,13 @@ ymin = ones(nI); # Porcentagem minima da geração das usinas contratada
 
 # ----------------------- CADASTRO CONTRATOS -------------------------------
 
-J           = 1                         # Número de contratos
+J           = 13                         # Número de contratos
 Qmax        = sum(GF[i] for i = 1:nI);   # Definição quantidade máxima
 Q           = ones(J,T);                 # Vetor Q
 Q[1,:]     .= Qmax;                      # Contrato A+1
-Q[2:13,:]  .= LinearAlgebra.I(12).*Qmax; # Contratos M+1
+if length(J) > 1
+    Q[2:13,:]  .= LinearAlgebra.I(12).*Qmax; # Contratos M+1
+end
 
 P           = ones(J, T);                # Vetor P
 
@@ -69,8 +71,9 @@ P[1,:]     .= a_Y*mean(PLD[1:S,1:T]) + b_Y;
 PLD_mensal  = Statistics.mean(PLD, dims = 1);
 a_M         = a_Y;
 b_M         = b_Y;
-P[2:end, :] .= (a_M .* PLD_mensal .+ b_M) .* LinearAlgebra.I(T)
-
+if length(J) > 1
+    P[2:end, :] .= (a_M .* PLD_mensal .+ b_M) .* LinearAlgebra.I(T)
+end
 
 global gammax = 0.2;
 xmax     = ones(J)*gammax;      # Porcentagem maxima de contratação mensal
@@ -185,8 +188,8 @@ S_Test         = 800
 R_teste_upside = zeros(S_Test)
 
 for s in 1:S_Test
-    R_teste_upside[s] = sum(sum(gu[s+1200, t, i] * GF[i] * PLD[s+1200, t] * h[t] for i in 1:nI) 
-                        + sum((P[j, t] - PLD[s+1200, t]) * Q[j, t] * x_novo[j] * h[t] for j in 1:J) for t in 1:T)./1e6;
+    R_teste_upside[s] = sum(sum(gu[s+S, t, i] * GF[i] * PLD[s+S, t] * h[t] for i in 1:nI) 
+                        + sum((P[j, t] - PLD[s+S, t]) * Q[j, t] * x_novo[j] * h[t] for j in 1:J) for t in 1:T)./1e6;
 end
 
 Quant_Prop_Test      = zeros(1, nQuant);
@@ -256,8 +259,8 @@ for (iter_λ, λ_) ∈ enumerate(Set_Λ)
     println("\n");
 
     for s in 1:S_Test
-        R_teste_RR[iter_λ, s] = sum(sum(gu[s+1200, t, i] * GF[i] * PLD[s+1200, t] * h[t] for i in 1:nI) 
-                        + sum((P[j, t] - PLD[s+1200, t]) * Q[j, t] * xOptimal_RR[iter_λ, j] * h[t] for j in 1:J) for t in 1:T);
+        R_teste_RR[iter_λ, s] = sum(sum(gu[s+S, t, i] * GF[i] * PLD[s+S, t] * h[t] for i in 1:nI) 
+                        + sum((P[j, t] - PLD[s+S, t]) * Q[j, t] * xOptimal_RR[iter_λ, j] * h[t] for j in 1:J) for t in 1:T);
     end
 
     for (iter_q, q_) ∈ enumerate(Set_Quant)
@@ -337,171 +340,15 @@ pos_Neut            = 1;
 pos_Aver            = 4;
 λ_plot              = Set_Λ[pos_Aver];
 delta               = 10;
-α_d = 0.20;
-
-function inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
-                        R_otimo_proposto, RPortTot_RR, pu_Money, α_d, S)
-
-    Sd = Int(round(S*α_d));
-
-    min_xlim = Int(round(min(minimum(R_otimo_proposto), 
-                minimum(RPortTot_RR[pos_Aver, :]./pu_Money), 
-                minimum(RPortTot_RR[pos_Neut, :]./pu_Money)
-    )/10, digits = 0)*10) - delta;
-
-    max_xlim = Int(round(max(maximum(R_otimo_proposto), 
-                maximum(RPortTot_RR[pos_Aver, :]./pu_Money), 
-                maximum(RPortTot_RR[pos_Neut, :]./pu_Money)
-    )/10, digits = 0)*10) + delta;
-
-    p = plot();
-
-    R_Prop_Sort         = sort(R_otimo_proposto);
-
-    p = plot!((1:S)./S, R_Prop_Sort, ylims = (min_xlim,max_xlim), labels = "Proposed approach",
-                legend = :topleft, color=:blue, xlabel="Inverse Cumulative Probability",
-                xticks = 0.0:0.1:1.0,
-                yticks = min_xlim:10:max_xlim,
-                ylabel = "Revenue MMR\$",
-                linewidth = s_linewidth
-    );
-
-    R_RR_Sort_Neut      = sort(RPortTot_RR[pos_Neut, :]);
-
-    p = plot!((1:S)./S, R_RR_Sort_Neut./pu_Money, 
-                color = :black, 
-                labels = "Risk-Neutral", 
-                linewidth = s_linewidth,
-                line=(:dot, 3)
-    );
-
-    R_RR_Sort_Aver      = sort(RPortTot_RR[pos_Aver, :]);
-
-    p = plot!((1:S)./S, R_RR_Sort_Aver./pu_Money, 
-                color = :gray, 
-                labels = string("Risk-Averse (λ = ", λ_plot, ")"),
-                linewidth = s_linewidth,
-                ls=:dash
-    );
-
-    display(p);
-    Plots.savefig(p, "InvDistAcum_Full.png");
-
-    #
-        # ---> Plot: Inverse Cumulative Distribution -- Downside Region <---
-    #
-
-    delta = 5;
-
-    min_xlim = Int(round(min(minimum(R_Prop_Sort[1:Sd]), 
-                minimum(R_RR_Sort_Aver[1:Sd]./pu_Money), 
-                minimum(R_RR_Sort_Neut[1:Sd]./pu_Money)
-    )/10, digits = 0)*10) - delta;
-
-    max_xlim = Int(round(max(maximum(R_Prop_Sort[1:Sd]), 
-                maximum(R_RR_Sort_Aver[1:Sd]./pu_Money), 
-                maximum(R_RR_Sort_Neut[1:Sd]./pu_Money)
-    )/10, digits = 0)*10) + delta;
-
-    p = plot();
-
-    R_Prop_Sort         = sort(R_otimo_proposto);
-
-    x_axis__            = 0:0.2/(Sd-1):α_d;
-
-    p = plot!(x_axis__, R_Prop_Sort[1:Sd], ylims = (min_xlim,max_xlim), labels = "Proposed approach",
-                legend = :bottomright, color=:blue, xlabel="Inverse Cumulative Probability",
-                xlims = (0.00,(α_d+0.01)),
-                xticks = 0.00:0.02:α_d,
-                ylabel = "Revenue MMR\$",
-                linewidth = s_linewidth
-    );
-
-    R_RR_Sort_Neut      = sort(RPortTot_RR[pos_Neut, :]);
-
-    p = plot!(x_axis__, R_RR_Sort_Neut[1:Sd]./pu_Money, 
-                color = :black, 
-                labels = "Risk-Neutral", 
-                linewidth = s_linewidth,
-                line=(:dot, 3)
-    );
-
-    R_RR_Sort_Aver      = sort(RPortTot_RR[pos_Aver, :]);
-
-    p = plot!(x_axis__, R_RR_Sort_Aver[1:Sd]./pu_Money, 
-                color = :gray, 
-                labels = string("Risk-Averse (λ = ", λ_plot, ")"),
-                linewidth = s_linewidth,
-                ls=:dash
-    );
-
-    display(p);
-    Plots.savefig(p, "InvDistAcum_DownSide.png");
-
-    #
-        # ---> Plot: Inverse Cumulative Distribution -- Upside Region <---
-    #
-
-    p = plot();
-
-    delta = 5;
-
-    min_xlim = Int(round(min(minimum(R_Prop_Sort[S-Sd+1:S]), 
-                minimum(R_RR_Sort_Aver[S-Sd+1:S]./pu_Money), 
-                minimum(R_RR_Sort_Neut[S-Sd+1:S]./pu_Money)
-    )/10, digits = 0)*10) - delta;
-
-    max_xlim = Int(round(max(maximum(R_Prop_Sort[S-Sd+1:S]), 
-                maximum(R_RR_Sort_Aver[S-Sd+1:S]./pu_Money), 
-                maximum(R_RR_Sort_Neut[S-Sd+1:S]./pu_Money)
-    )/10, digits = 0)*10) + delta;
-
-    R_Prop_Sort         = sort(R_otimo_proposto);
-    x_axis__            = (1 - α_d):0.2/239:1;
-
-
-    p = plot!(x_axis__, R_Prop_Sort[S-Sd+1:S], 
-                ylims = (min_xlim,max_xlim), 
-                labels = "Proposed approach",
-                legend = :topleft, color=:blue, xlabel="Inverse Cumulative Probability",
-                xlims = ((1-α_d),1),
-                xticks = (1-α_d):0.02:1,
-                yticks = min_xlim:10:max_xlim,
-                ylabel = "Revenue MMR\$",
-                linewidth = s_linewidth
-    );
-
-    R_RR_Sort_Neut      = sort(RPortTot_RR[pos_Neut, :]);
-
-    p = plot!(x_axis__, R_RR_Sort_Neut[S-Sd+1:S]./pu_Money, 
-                color = :black, 
-                labels = "Risk-Neutral", 
-                linewidth = s_linewidth,
-                line=(:dot, 3)
-    );
-
-    R_RR_Sort_Aver      = sort(RPortTot_RR[pos_Aver, :]);
-
-    p = plot!(x_axis__, R_RR_Sort_Aver[S-Sd+1:S]./pu_Money, 
-                color = :gray, 
-                labels = string("Risk-Averse (λ = ", λ_plot, ")"),
-                linewidth = s_linewidth,
-                ls=:dash
-    );
-
-    display(p);
-    Plots.savefig(p, "InvDistAcum_Upside.png");
-
-    return
-
-end
+α_d                 = 0.20;
+name                = "InSample"
 
 inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
-                R_otimo_proposto, RPortTot_RR, pu_Money, α_d, S)
+                R_otimo_proposto, RPortTot_RR, pu_Money, α_d, S, name)
 
-
+name = "OutOfSample"
 inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
-                R_teste_upside, R_teste_RR, pu_Money, α_d, S_Test)
+                R_teste_upside, R_teste_RR, pu_Money, α_d, S_Test, name)
 
 
 #
@@ -524,12 +371,14 @@ contrato[:,1]   .= soma_neutral;#*TotGF;
 contrato[:,2]   .= soma_averse;#*TotGF;
 contrato[:,3]   .= soma_proposto;#*TotGF;
 
-geracao1        = gu_arinos*GF[1];
-geracao2        = gu_dis*GF[2];
+# -------------- InSample Plot ----------------
 
-p_energy = plot();
+geracao1_InSample        = gu_arinos[1:S,:]*GF[1];
+geracao2_InSample        = gu_dis[1:S,:]*GF[2];
 
-p_energy = groupedbar!(
+p_energy_InSample = plot();
+
+p_energy_InSample = groupedbar!(
     contrato,
     color = ["black" "gray" "blue"],
     linecolor = :white,
@@ -547,16 +396,16 @@ xaxis_leg       = [i for i ∈ 1:12];
 vRES_Generation = zeros(S,T)
 for s ∈ 1:S
     for t ∈ 1:T
-        vRES_Generation[s,t] = (geracao1[s,t] + geracao2[s,t]);
+        vRES_Generation[s,t] = (geracao1_InSample[s,t] + geracao2_InSample[s,t]);
     end;
 end;
 
 lev_fillalpha   = 0.5;
 lev_color       = :limegreen;
 
-p_energy.n = 0;
+p_energy_InSample.n = 0;
 
-p_energy = violin!(
+p_energy_InSample = violin!(
     vRES_Generation,
     color = lev_color,
     ylims = (0,180),
@@ -569,5 +418,55 @@ p_energy = violin!(
     linecolor = nothing
 );
 
-display(p_energy);
-Plots.savefig(p_energy, "p_energy.png");
+display(p_energy_InSample);
+Plots.savefig(p_energy_InSample, "p_energy_InSample.png");
+
+# -------------- OutOfSample Plot ----------------
+
+geracao1_OutOfSample        = gu_arinos[S+1:S+S_Test,:]*GF[1];
+geracao2_OutOfSample        = gu_dis[S+1:S+S_Test,:]*GF[2];
+
+p_energy_OutOfSample = plot();
+
+p_energy_OutOfSample = groupedbar!(
+    contrato,
+    color = ["black" "gray" "blue"],
+    linecolor = :white,
+    fillalpha = [0.9 0.9 0.9],
+    label = ["Risk-Neutral" string("Risk-Averse (λ = ", λ_plot, ")") "Proposed Approach"],
+    xlabel = "Bussiness Periods (Months)",
+    ylabel = "Energy (avgMW)",
+    ylims = (50,300),
+    legend = :bottomright,
+    linewidth = 1,
+    x_foreground_color_border = :white
+);
+
+xaxis_leg       = [i for i ∈ 1:12];
+vRES_Generation = zeros(S_Test,T)
+for s ∈ 1:S_Test
+    for t ∈ 1:T
+        vRES_Generation[s,t] = (geracao1_OutOfSample[s,t] + geracao2_OutOfSample[s,t]);
+    end;
+end;
+
+lev_fillalpha   = 0.5;
+lev_color       = :limegreen;
+
+p_energy_OutOfSample.n = 0;
+
+p_energy_OutOfSample = violin!(
+    vRES_Generation,
+    color = lev_color,
+    ylims = (0,180),
+    legend = :topleft,
+    xticks = 1:1:12,
+    x_foreground_color_border = :white,
+    xlabel = "Bussiness Periods (Months)",
+    fillalpha=[lev_fillalpha lev_fillalpha lev_fillalpha],
+    label = ["Renewable Production" false false false false false false false false false false false false],
+    linecolor = nothing
+);
+
+display(p_energy_OutOfSample);
+Plots.savefig(p_energy_OutOfSample, "p_energy_OutOfSample.png");

@@ -271,3 +271,162 @@ function port_alloc(params::ParametrosContratacao)
 
     return Rdisp_otimo, Rquant_otimo, R_otimo, R_total_otimo, x_otimo, y_otimo
 end
+
+
+function inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
+                        R_upside, R_RR, pu_Money, α_d, S, name)
+
+    Sd = Int(round(S*α_d));
+
+    min_xlim = Int(round(min(minimum(R_upside), 
+    minimum(R_RR[pos_Aver, :]./pu_Money), 
+    minimum(R_RR[pos_Neut, :]./pu_Money)
+    )/10, digits = 0)*10) - delta;
+
+    max_xlim = Int(round(max(maximum(R_upside), 
+    maximum(R_RR[pos_Aver, :]./pu_Money), 
+    maximum(R_RR[pos_Neut, :]./pu_Money)
+    )/10, digits = 0)*10) + delta;
+
+    p1 = plot();
+
+    R_Prop_Sort         = sort(R_upside);
+
+    p1 = plot!((1:S)./S, R_Prop_Sort, ylims = (min_xlim,max_xlim), labels = "Proposed approach",
+    legend = :topleft, color=:blue, xlabel="Inverse Cumulative Probability",
+    xticks = 0.0:0.1:1.0,
+    yticks = min_xlim:10:max_xlim,
+    ylabel = "Revenue MMR\$",
+    linewidth = s_linewidth
+    );
+
+    R_RR_Sort_Neut      = sort(R_RR[pos_Neut, :]);
+
+    p1 = plot!((1:S)./S, R_RR_Sort_Neut./pu_Money, 
+    color = :black, 
+    labels = "Risk-Neutral", 
+    linewidth = s_linewidth,
+    line=(:dot, 3)
+    );
+
+    R_RR_Sort_Aver      = sort(R_RR[pos_Aver, :]);
+
+    p1 = plot!((1:S)./S, R_RR_Sort_Aver./pu_Money, 
+    color = :gray, 
+    labels = string("Risk-Averse (λ = ", λ_plot, ")"),
+    linewidth = s_linewidth,
+    ls=:dash
+    );
+
+    display(p1);
+    fig_title1 = string("InvDistAcum_Full_",name,".png")
+    Plots.savefig(p1, fig_title1);
+
+    #
+    # ---> Plot: Inverse Cumulative Distribution -- Downside Region <---
+    #
+
+    delta = 5;
+
+    min_xlim = Int(round(min(minimum(R_Prop_Sort[1:Sd]), 
+    minimum(R_RR_Sort_Aver[1:Sd]./pu_Money), 
+    minimum(R_RR_Sort_Neut[1:Sd]./pu_Money)
+    )/10, digits = 0)*10) - delta;
+
+    max_xlim = Int(round(max(maximum(R_Prop_Sort[1:Sd]), 
+    maximum(R_RR_Sort_Aver[1:Sd]./pu_Money), 
+    maximum(R_RR_Sort_Neut[1:Sd]./pu_Money)
+    )/10, digits = 0)*10) + delta;
+
+    p2 = plot();
+
+    R_Prop_Sort         = sort(R_upside);
+
+    x_axis__            = 0:0.2/(Sd-1):α_d;
+
+    p2 = plot!(x_axis__, R_Prop_Sort[1:Sd], ylims = (min_xlim,max_xlim), labels = "Proposed approach",
+    legend = :bottomright, color=:blue, xlabel="Inverse Cumulative Probability",
+    xlims = (0.00,(α_d+0.01)),
+    xticks = 0.00:0.02:α_d,
+    ylabel = "Revenue MMR\$",
+    linewidth = s_linewidth
+    );
+
+    R_RR_Sort_Neut      = sort(R_RR[pos_Neut, :]);
+
+    p2 = plot!(x_axis__, R_RR_Sort_Neut[1:Sd]./pu_Money, 
+    color = :black, 
+    labels = "Risk-Neutral", 
+    linewidth = s_linewidth,
+    line=(:dot, 3)
+    );
+
+    R_RR_Sort_Aver      = sort(R_RR[pos_Aver, :]);
+
+    p2 = plot!(x_axis__, R_RR_Sort_Aver[1:Sd]./pu_Money, 
+    color = :gray, 
+    labels = string("Risk-Averse (λ = ", λ_plot, ")"),
+    linewidth = s_linewidth,
+    ls=:dash
+    );
+
+    fig_title2 = string("InvDistAcum_DownSide_",name,".png")
+    Plots.savefig(p2, fig_title2);
+
+    #
+    # ---> Plot: Inverse Cumulative Distribution -- Upside Region <---
+    #
+
+    p3 = plot();
+
+    delta = 5;
+
+    min_xlim = Int(round(min(minimum(R_Prop_Sort[S-Sd+1:S]), 
+    minimum(R_RR_Sort_Aver[S-Sd+1:S]./pu_Money), 
+    minimum(R_RR_Sort_Neut[S-Sd+1:S]./pu_Money)
+    )/10, digits = 0)*10) - delta;
+
+    max_xlim = Int(round(max(maximum(R_Prop_Sort[S-Sd+1:S]), 
+    maximum(R_RR_Sort_Aver[S-Sd+1:S]./pu_Money), 
+    maximum(R_RR_Sort_Neut[S-Sd+1:S]./pu_Money)
+    )/10, digits = 0)*10) + delta;
+
+    R_Prop_Sort         = sort(R_upside);
+    x_axis__            = (1 - α_d):0.2/(Sd-1):1;
+
+
+    p3 = plot!(x_axis__, R_Prop_Sort[S-Sd+1:S], 
+    ylims = (min_xlim,max_xlim), 
+    labels = "Proposed approach",
+    legend = :topleft, color=:blue, xlabel="Inverse Cumulative Probability",
+    xlims = ((1-α_d),1),
+    xticks = (1-α_d):0.02:1,
+    yticks = min_xlim:10:max_xlim,
+    ylabel = "Revenue MMR\$",
+    linewidth = s_linewidth
+    );
+
+    R_RR_Sort_Neut      = sort(R_RR[pos_Neut, :]);
+
+    p3 = plot!(x_axis__, R_RR_Sort_Neut[S-Sd+1:S]./pu_Money, 
+    color = :black, 
+    labels = "Risk-Neutral", 
+    linewidth = s_linewidth,
+    line=(:dot, 3)
+    );
+
+    R_RR_Sort_Aver      = sort(R_RR[pos_Aver, :]);
+
+    p3 = plot!(x_axis__, R_RR_Sort_Aver[S-Sd+1:S]./pu_Money, 
+    color = :gray, 
+    labels = string("Risk-Averse (λ = ", λ_plot, ")"),
+    linewidth = s_linewidth,
+    ls=:dash
+    );
+
+    fig_title3 = string("InvDistAcum_Upside_",name,".png")
+    Plots.savefig(p3, fig_title3);
+
+return
+
+end
