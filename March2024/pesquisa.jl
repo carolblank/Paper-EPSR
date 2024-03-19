@@ -54,11 +54,11 @@ ymin = ones(nI); # Porcentagem minima da geração das usinas contratada
 
 # ----------------------- CADASTRO CONTRATOS -------------------------------
 
-J           = 13                         # Número de contratos
+J           = 1                         # Número de contratos
 Qmax        = sum(GF[i] for i = 1:nI);   # Definição quantidade máxima
 Q           = ones(J,T);                 # Vetor Q
 Q[1,:]     .= Qmax;                      # Contrato A+1
-if length(J) > 1
+if J > 1
     Q[2:13,:]  .= LinearAlgebra.I(12).*Qmax; # Contratos M+1
 end
 
@@ -71,7 +71,7 @@ P[1,:]     .= a_Y*mean(PLD[1:S,1:T]) + b_Y;
 PLD_mensal  = Statistics.mean(PLD, dims = 1);
 a_M         = a_Y;
 b_M         = b_Y;
-if length(J) > 1
+if J > 1
     P[2:end, :] .= (a_M .* PLD_mensal .+ b_M) .* LinearAlgebra.I(T)
 end
 
