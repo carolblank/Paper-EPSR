@@ -30,7 +30,7 @@ gu             = zeros(S, T, nI) # Geração das usinas
 C              = zeros(nI,T)
 
 GF_dis         = 50.0
-GF_arinos      = 50.0
+GF_arinos      = 0.0
 GF             = [GF_dis, GF_arinos]
 
 TotGF = sum(GF);
@@ -54,7 +54,7 @@ ymin = ones(nI); # Porcentagem minima da geração das usinas contratada
 
 # ----------------------- CADASTRO CONTRATOS -------------------------------
 
-J           = 1                         # Número de contratos
+J           = 13                         # Número de contratos
 Qmax        = sum(GF[i] for i = 1:nI);   # Definição quantidade máxima
 Q           = ones(J,T);                 # Vetor Q
 Q[1,:]     .= Qmax;                      # Contrato A+1
@@ -64,18 +64,21 @@ end
 
 P           = ones(J, T);                # Vetor P
 
-a_Y         = 0.93;                      # Coeficiente angular p/ definição do preço
+#a_Y         = 1.0;                      # Coeficiente angular p/ definição do preço
+a_Y         = 0.93;
+#b_Y         = 0.1; 
 b_Y         = 15.31;                     # Coeficiente linear p/ definição do preço
 P[1,:]     .= a_Y*mean(PLD[1:S,1:T]) + b_Y;
 
 PLD_mensal  = Statistics.mean(PLD, dims = 1);
-a_M         = a_Y;
-b_M         = b_Y;
+a_M         = 1.0;
+b_M         = 0.1;
 if J > 1
     P[2:end, :] .= (a_M .* PLD_mensal .+ b_M) .* LinearAlgebra.I(T)
 end
 
-global gammax = 0.2;
+
+global gammax = 0.5;
 xmax     = ones(J)*gammax;      # Porcentagem maxima de contratação mensal
 xmin     = ones(J).*-gammax;    # Porcentagem mínima de contratação mensal
 xmax[1]  = 1.0;                 # Porcentagem maxima de contratação anual
@@ -337,7 +340,7 @@ println("\n\n\n");
 
 s_linewidth         = 2;
 pos_Neut            = 1;
-pos_Aver            = 4;
+pos_Aver            = 5;
 λ_plot              = Set_Λ[pos_Aver];
 delta               = 10;
 α_d                 = 0.20;
@@ -367,14 +370,14 @@ else
     soma_proposto   = xMat[end,1];
 end
 
-contrato[:,1]   .= soma_neutral;#*TotGF;
-contrato[:,2]   .= soma_averse;#*TotGF;
-contrato[:,3]   .= soma_proposto;#*TotGF;
+contrato[:,1]   .= soma_neutral*Qmax./100;
+contrato[:,2]   .= soma_averse*Qmax./100;
+contrato[:,3]   .= soma_proposto*Qmax./100;
 
 # -------------- InSample Plot ----------------
 
-geracao1_InSample        = gu_arinos[1:S,:]*GF[1];
-geracao2_InSample        = gu_dis[1:S,:]*GF[2];
+geracao1_InSample        = gu_dis[1:S,:]*GF[1];
+geracao2_InSample        = gu_arinos[1:S,:]*GF[2];
 
 p_energy_InSample = plot();
 
