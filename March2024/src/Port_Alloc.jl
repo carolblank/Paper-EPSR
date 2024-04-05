@@ -320,7 +320,7 @@ function inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
 
     display(p1);
     fig_title1 = string("InvDistAcum_Full_",name,".png")
-    Plots.savefig(p1, fig_title1);
+    Plots.savefig(p1, results_path*fig_title1);
 
     #
     # ---> Plot: Inverse Cumulative Distribution -- Downside Region <---
@@ -371,7 +371,7 @@ function inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
     );
 
     fig_title2 = string("InvDistAcum_DownSide_",name,".png")
-    Plots.savefig(p2, fig_title2);
+    Plots.savefig(p2, results_path*fig_title2);
 
     #
     # ---> Plot: Inverse Cumulative Distribution -- Upside Region <---
@@ -425,7 +425,7 @@ function inv_cum_graph(s_linewidth, pos_Neut, pos_Aver, λ_plot, delta,
     );
 
     fig_title3 = string("InvDistAcum_Upside_",name,".png")
-    Plots.savefig(p3, fig_title3);
+    Plots.savefig(p3, results_path*fig_title3);
 
 return
 

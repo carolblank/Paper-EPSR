@@ -1,6 +1,5 @@
-#using .PortfolioOptCTG
 using StatsPlots, Plots
-using HiGHS, LinearAlgebra
+using HiGHS, LinearAlgebra, XLSX
 
 include("src/Port_Alloc.jl");
 include("src/PortfolioOptCTG.jl");
@@ -16,6 +15,7 @@ q         = 1 / S .* ones(S)    # Probabilidade dos cenarios
 pu_Money  = 1e6;
 
 # Leitura do PLD Newave
+results_path = "March2024/Results/Only_Yearly/"
 dir = dirname(dirname(@__FILE__))
 PLD = Matrix(DataFrame(CSV.File("March2024/PLD.csv";header=false)))'[:,:];
 
@@ -30,17 +30,17 @@ gu             = zeros(S, T, nI) # Geração das usinas
 C              = zeros(nI,T)
 
 GF_dis         = 50.0
-GF_arinos      = 0.0
+GF_arinos      = 50.0
 GF             = [GF_dis, GF_arinos]
 
 TotGF = sum(GF);
 
 #Leitura geração
-gu_dis = Matrix(DataFrame(CSV.File("March2024/gu_dis.csv";header=false)))'[:,1:T];
+gu_dis = Matrix(DataFrame(CSV.File("March2024/OUT-gen2.csv";header=true)))'[:,1:T];
 gu_dis *=30
 gu_dis /= mean(gu_dis)
 
-gu_arinos = Matrix(DataFrame(CSV.File("March2024/gu_arinos.csv";header=false)))'[:,1:T];
+gu_arinos = Matrix(DataFrame(CSV.File("March2024/OUT-gen1.csv";header=true)))'[:,1:T];
 gu_arinos *=30;
 gu_arinos /= mean(gu_arinos);
 
@@ -54,7 +54,7 @@ ymin = ones(nI); # Porcentagem minima da geração das usinas contratada
 
 # ----------------------- CADASTRO CONTRATOS -------------------------------
 
-J           = 13                         # Número de contratos
+J           = 1                         # Número de contratos
 Qmax        = sum(GF[i] for i = 1:nI);   # Definição quantidade máxima
 Q           = ones(J,T);                 # Vetor Q
 Q[1,:]     .= Qmax;                      # Contrato A+1
@@ -71,8 +71,8 @@ b_Y         = 15.31;                     # Coeficiente linear p/ definição do 
 P[1,:]     .= a_Y*mean(PLD[1:S,1:T]) + b_Y;
 
 PLD_mensal  = Statistics.mean(PLD, dims = 1);
-a_M         = 1.0;
-b_M         = 0.1;
+a_M         = a_Y;
+b_M         = b_Y;
 if J > 1
     P[2:end, :] .= (a_M .* PLD_mensal .+ b_M) .* LinearAlgebra.I(T)
 end
@@ -212,7 +212,7 @@ CVaR_Prop_Test       = Statistics.mean(sort(R_teste_upside)[1:Int(round((1 - α)
 # =========================================================================== #
 
 
-Set_Λ           = [0.00 ; 0.05 ; 0.10 ; 0.35 ; 0.50 ; 0.75 ; 0.90 ; 0.95 ; 0.99];
+Set_Λ           = [0.00 ; 0.05 ; 0.10 ; 0.25 ; 0.50 ; 0.75 ; 0.90 ; 0.95 ; 0.99];
 n_Λ             = length(Set_Λ);
 
 global Rdisp_RR        = zeros(n_Λ, S, T, nI);
@@ -284,8 +284,11 @@ end;
 
 # ----------------------- Create DataFrames TREINADO -------------------------------
 
+row_titles = ["0.00" ; "0.05" ; "0.10" ; "0.25" ; "0.50" ; "0.75" ; "0.90" ; "0.95" ; "0.99"; "Proposed"]
 xMat    = round.([xOptimal_RR ; x_novo'].*100, digits = 2);
 x_df    = DataFrame(xMat, :auto);
+insertcols!(x_df, 1, "λ" => row_titles)
+
 column_titles = ["Avg", "CVaR", "q 1%", "q 5%", "q 10%", "q 25%", "q 50%", "q 75%", "q 90%", "q 95%", "q 99%"]
 
 println("\n\n");
@@ -326,6 +329,22 @@ println(" --> Quantile Levels - out-of-sample <-- ");
 println("\n");
 print(q_df_Test);
 println("\n\n\n");
+
+# ------------------------ CSV Resultados -------------------------------------
+
+xlsx_file_path = results_path*"Results_Stats.xlsx"
+
+XLSX.openxlsx(xlsx_file_path, mode="w") do xf
+
+    sheet_x_df = XLSX.addsheet!(xf, "x_df")
+    XLSX.writetable!(sheet_x_df, x_df)
+
+    sheet_q_df = XLSX.addsheet!(xf, "q_df")
+    XLSX.writetable!(sheet_q_df, q_df)
+    
+    sheet_q_df_Test = XLSX.addsheet!(xf, "q_df_Test")
+    XLSX.writetable!(sheet_q_df_Test, q_df_Test)
+end
 
 
 # ================================================================= #
@@ -422,7 +441,7 @@ p_energy_InSample = violin!(
 );
 
 display(p_energy_InSample);
-Plots.savefig(p_energy_InSample, "p_energy_InSample.png");
+Plots.savefig(p_energy_InSample, results_path*"p_energy_InSample.png");
 
 # -------------- OutOfSample Plot ----------------
 
@@ -472,4 +491,4 @@ p_energy_OutOfSample = violin!(
 );
 
 display(p_energy_OutOfSample);
-Plots.savefig(p_energy_OutOfSample, "p_energy_OutOfSample.png");
+Plots.savefig(p_energy_OutOfSample, results_path*"p_energy_OutOfSample.png");
