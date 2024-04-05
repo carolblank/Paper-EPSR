@@ -67,7 +67,7 @@ P           = ones(J, T);                # Vetor P
 #a_Y         = 1.0;                      # Coeficiente angular p/ definição do preço
 a_Y         = 0.93;
 #b_Y         = 0.1; 
-b_Y         = 15.31;                     # Coeficiente linear p/ definição do preço
+b_Y         = 11.31;                     # Coeficiente linear p/ definição do preço
 P[1,:]     .= a_Y*mean(PLD[1:S,1:T]) + b_Y;
 
 PLD_mensal  = Statistics.mean(PLD, dims = 1);
