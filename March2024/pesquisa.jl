@@ -29,7 +29,7 @@ nI             = 2 # Número de usinas do caso
 gu             = zeros(S, T, nI) # Geração das usinas
 C              = zeros(nI,T)
 
-GF_dis         = 50.0
+GF_dis         = 100.0
 GF_arinos      = 0
 GF             = [GF_dis, GF_arinos]
 
