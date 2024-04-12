@@ -15,7 +15,7 @@ q         = 1 / S .* ones(S)    # Probabilidade dos cenarios
 pu_Money  = 1e6;
 
 # Leitura do PLD Newave
-results_path = "March2024/Results/Solar_Eolica/"
+results_path = "March2024/Results/Eolica/"
 dir = dirname(dirname(@__FILE__))
 PLD = Matrix(DataFrame(CSV.File("March2024/PLD.csv";header=false)))'[:,:];
 
@@ -30,7 +30,7 @@ gu             = zeros(S, T, nI) # Geração das usinas
 C              = zeros(nI,T)
 
 GF_dis         = 50.0
-GF_arinos      = 50.0
+GF_arinos      = 0
 GF             = [GF_dis, GF_arinos]
 
 TotGF = sum(GF);
@@ -183,6 +183,7 @@ end
 
 Avg_Prop        = mean(R_otimo_proposto);
 CVaR_Prop       = Statistics.mean(sort(R_otimo_proposto)[1:Int(round((1 - α) * S)), :]);
+CVaRUp_Prop       = Statistics.mean(sort(R_otimo_proposto)[Int(round((α) * S))+1:S,:]);
 
 
 # ----------------------- MODELO ***UPSIDE*** TESTE - Compute Statistics -------------------------------
@@ -203,6 +204,7 @@ end
 
 Avg_Prop_Test        = mean(R_teste_upside);
 CVaR_Prop_Test       = Statistics.mean(sort(R_teste_upside)[1:Int(round((1 - α) * S_Test)), :]);
+CVaRUp_Prop_Test       = Statistics.mean(sort(R_teste_upside)[Int(round((α) * S_Test))+1:S_Test,:]);
 
 
 
@@ -225,6 +227,7 @@ global yOptimal_RR     = zeros(n_Λ, nI);
 Quant_RR        = zeros(n_Λ, nQuant);
 Avg_RR          = zeros(n_Λ);
 CVaR_RR         = zeros(n_Λ);
+CVaRUp_RR       = zeros(n_Λ);
 
 for (iter_λ, λ_) ∈ enumerate(Set_Λ)
     println("\n");
@@ -240,6 +243,7 @@ for (iter_λ, λ_) ∈ enumerate(Set_Λ)
         Quant_RR[iter_λ, iter_q]    = sort(RPortTot_RR[iter_λ, :])[Int(round(q_*S))]/pu_Money;
         Avg_RR[iter_λ]              = mean(RPortTot_RR[iter_λ, :])/pu_Money;
         CVaR_RR[iter_λ]             = Statistics.mean(sort(RPortTot_RR[iter_λ, :])[1:Int(round((1 - α) * S)), :])/pu_Money;
+        CVaRUp_RR[iter_λ]           = Statistics.mean(sort(RPortTot_RR[iter_λ, :])[Int(round((α) * S))+1:S, :])/pu_Money;
 
     end;
 
@@ -255,6 +259,7 @@ R_teste_RR = zeros(n_Λ, S_Test)
 Quant_RR_Test        = zeros(n_Λ, nQuant);
 Avg_RR_Test          = zeros(n_Λ);
 CVaR_RR_Test         = zeros(n_Λ);
+CVaRUp_RR_Test       = zeros(n_Λ);
 
 for (iter_λ, λ_) ∈ enumerate(Set_Λ)
     println("\n");
@@ -270,6 +275,7 @@ for (iter_λ, λ_) ∈ enumerate(Set_Λ)
         Quant_RR_Test[iter_λ, iter_q]    = sort(R_teste_RR[iter_λ, :])[Int(round(q_*S_Test))]/pu_Money;
         Avg_RR_Test[iter_λ]              = mean(R_teste_RR[iter_λ, :])/pu_Money;
         CVaR_RR_Test[iter_λ]             = Statistics.mean(sort(R_teste_RR[iter_λ, :])[1:Int(round((1 - α) * S_Test)), :])/pu_Money;
+        CVaRUp_RR_Test[iter_λ]           = Statistics.mean(sort(R_teste_RR[iter_λ, :])[Int(round((α) * S_Test))+1:S_Test, :])/pu_Money;
 
     end;
 
@@ -289,7 +295,7 @@ xMat    = round.([xOptimal_RR ; x_novo'].*100, digits = 2);
 x_df    = DataFrame(xMat, :auto);
 insertcols!(x_df, 1, "λ" => row_titles)
 
-column_titles = ["Avg", "CVaR", "q 1%", "q 5%", "q 10%", "q 25%", "q 50%", "q 75%", "q 90%", "q 95%", "q 99%"]
+column_titles = ["Avg", "CVaR", "CVaR Up", "q 1%", "q 5%", "q 10%", "q 25%", "q 50%", "q 75%", "q 90%", "q 95%", "q 99%"]
 
 println("\n\n");
 println(" --> Contracting Levels <-- ");
@@ -300,8 +306,9 @@ print(x_df);
 qMat    = [Quant_RR ; Quant_Prop];
 AvgMat  = [Avg_RR ; Avg_Prop];
 CVaRMat = [CVaR_RR ; CVaR_Prop];
+CVaRUpMat = [CVaRUp_RR ; CVaRUp_Prop];
 
-qMat    = [AvgMat CVaRMat qMat];
+qMat    = [AvgMat CVaRMat CVaRUpMat qMat];
 q_df    = DataFrame(qMat, :auto);
 q_df = DataFrame(qMat, Symbol.(column_titles))
 
@@ -318,8 +325,9 @@ println("\n\n\n");
 qMat_Test    = [Quant_RR_Test ; Quant_Prop_Test];
 AvgMat_Test  = [Avg_RR_Test ; Avg_Prop_Test];
 CVaRMat_Test = [CVaR_RR_Test ; CVaR_Prop_Test];
+CVaRUpMat_Test = [CVaRUp_RR_Test ; CVaRUp_Prop_Test];
 
-qMat_Test    = [AvgMat_Test CVaRMat_Test qMat_Test];
+qMat_Test    = [AvgMat_Test CVaRMat_Test CVaRUpMat_Test qMat_Test];
 q_df_Test    = DataFrame(qMat_Test, :auto);
 
 q_df_Test = DataFrame(qMat_Test, Symbol.(column_titles))
@@ -328,6 +336,30 @@ println("\n\n");
 println(" --> Quantile Levels - out-of-sample <-- ");
 println("\n");
 print(q_df_Test);
+println("\n\n\n");
+
+# ----------------------- Indicador Risco-Upside -------------------------------
+
+pos_Neut            = 1;
+pos_Aver            = 5;
+pos_Prop            = 10;
+pos_CVaR            = 2;
+pos_CVaRUp          = 3;
+
+Indicador_InSample = (q_df[pos_Prop, pos_CVaRUp] - q_df[pos_Aver, pos_CVaRUp])/
+                     (q_df[pos_Prop, pos_CVaR] - q_df[pos_Aver, pos_CVaR])
+
+Indicador_OutofSample = (q_df_Test[pos_Prop, pos_CVaRUp] - q_df_Test[pos_Aver, pos_CVaRUp])/
+                     (q_df_Test[pos_Prop, pos_CVaR] - q_df_Test[pos_Aver, pos_CVaR])
+
+Indicators = round.([Indicador_InSample, Indicador_OutofSample], digits=2)
+titles = ["In Sample", "Out of Sample"]
+df_Indicator = DataFrame(Type = titles,Indicator = Indicators)
+
+println("\n\n");
+println(" --> Performance Indicator - In-sample <-- ");
+println("\n");
+print(df_Indicator);
 println("\n\n\n");
 
 # ------------------------ CSV Resultados -------------------------------------
@@ -344,6 +376,10 @@ XLSX.openxlsx(xlsx_file_path, mode="w") do xf
     
     sheet_q_df_Test = XLSX.addsheet!(xf, "q_df_Test")
     XLSX.writetable!(sheet_q_df_Test, q_df_Test)
+
+    sheet_df_Indicator = XLSX.addsheet!(xf, "Indicator")
+    XLSX.writetable!(sheet_df_Indicator, df_Indicator)
+
 end
 
 
@@ -358,8 +394,6 @@ end
 #
 
 s_linewidth         = 2;
-pos_Neut            = 1;
-pos_Aver            = 5;
 λ_plot              = Set_Λ[pos_Aver];
 delta               = 10;
 α_d                 = 0.20;
