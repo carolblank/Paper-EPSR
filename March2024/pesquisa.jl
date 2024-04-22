@@ -15,7 +15,7 @@ q         = 1 / S .* ones(S)    # Probabilidade dos cenarios
 pu_Money  = 1e6;
 
 # Leitura do PLD Newave
-results_path = "March2024/Results/Eolica/"
+results_path = "March2024/Results/Solar_Eolica/"
 dir = dirname(dirname(@__FILE__))
 PLD = Matrix(DataFrame(CSV.File("March2024/PLD.csv";header=false)))'[:,:];
 
@@ -29,8 +29,8 @@ nI             = 2 # Número de usinas do caso
 gu             = zeros(S, T, nI) # Geração das usinas
 C              = zeros(nI,T)
 
-GF_dis         = 100.0
-GF_arinos      = 0
+GF_dis         = 50.0
+GF_arinos      = 50.0
 GF             = [GF_dis, GF_arinos]
 
 TotGF = sum(GF);
