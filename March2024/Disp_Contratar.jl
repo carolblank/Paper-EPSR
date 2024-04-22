@@ -4,6 +4,8 @@
 range_P = collect(0:10:200)
 
 x_otimo_disp_upside = zeros(length(range_P))
+CVaR_Prop = zeros(length(range_P))
+CVaRUp_Prop = zeros(length(range_P))
 
 for (iter,p_variavel) in enumerate(range_P)
 
@@ -78,6 +80,9 @@ for (iter,p_variavel) in enumerate(range_P)
 
         x_otimo_disp_upside[iter] = x_novo[1]
 
+        CVaR_Prop[iter]       = Statistics.mean(sort(R_otimo_proposto)[1:Int(round((1 - α) * S)), :]);
+        CVaRUp_Prop[iter]      = Statistics.mean(sort(R_otimo_proposto)[Int(round((α) * S))+1:S,:]);
+
 end
 
 Y = x_otimo_disp_upside
@@ -97,6 +102,8 @@ p = plot(X, Y,
 
 
 x_otimo_disp_RR = zeros(length(range_P))
+CVaR_RR = zeros(length(range_P))
+CVaRUp_RR = zeros(length(range_P))
 
 for (iter,p_variavel) in enumerate(range_P)
 
@@ -108,6 +115,8 @@ for (iter,p_variavel) in enumerate(range_P)
         Rdisp_RR, Rquant_RR, RPort_RR, RPortTot_RR, xOptimal_RR, yOptimal_RR = port_alloc(params);
     
         x_otimo_disp_RR[iter] = xOptimal_RR[1]
+        CVaR_RR[iter]             = Statistics.mean(sort(RPortTot_RR)[1:Int(round((1 - α) * S)), :])/pu_Money;
+        CVaRUp_RR[iter]           = Statistics.mean(sort(RPortTot_RR)[Int(round((α) * S))+1:S, :])/pu_Money;
 
 end
 
@@ -124,6 +133,8 @@ p = plot!(X, Y,
 # ----------------------------- Risk-neutral -------------------------------
 
 x_otimo_disp_Neutral = zeros(length(range_P))
+CVaR_Neutral = zeros(length(range_P))
+CVaRUp_Neutral = zeros(length(range_P))
 
 for (iter,p_variavel) in enumerate(range_P)
 
@@ -135,6 +146,8 @@ for (iter,p_variavel) in enumerate(range_P)
         Rdisp_Neutral, Rquant_Neutral, RPort_Neutral, RPortTot_Neutral, xOptimal_Neutral, yOptimal_Neutral = port_alloc(params);
     
         x_otimo_disp_Neutral[iter] = xOptimal_Neutral[1]
+        CVaR_Neutral[iter]             = Statistics.mean(sort(RPortTot_Neutral)[1:Int(round((1 - α) * S)), :])/pu_Money;
+        CVaRUp_Neutral[iter]           = Statistics.mean(sort(RPortTot_Neutral)[Int(round((α) * S))+1:S, :])/pu_Money;
 
 end
 
@@ -151,3 +164,31 @@ p = plot!(X,Y,
 display(p)
 
 Plots.savefig(p, results_path*"Disp_Contratar.png");
+
+Eta_RR = zeros(21)
+for i in 1:21
+    Eta_RR[i] = (CVaRUp_Prop[i] - CVaRUp_RR[i])/(CVaR_Prop[i] - CVaR_RR[i])
+end
+
+p = plot(X, Eta_RR, 
+        label = "Risk-Averse",
+        xlabel = "Contract Price (A+1)",
+        ylabel = "η",
+        color = :gray,
+        linewidth = s_linewidth,
+        ls=:dash)
+
+Eta_Neutral = zeros(21)
+for i in 1:21
+    Eta_Neutral[i] = (CVaRUp_Prop[i] - CVaRUp_Neutral[i])/(CVaR_Prop[i] - CVaR_Neutral[i])
+end
+
+p = plot!(X, Eta_Neutral, 
+        label = "Risk-Neutral",
+        xlabel = "Contract Price (A+1)",
+        ylabel = "η",
+        color = :black,
+        linewidth = s_linewidth,
+        line=(:dot, 3))
+
+Plots.savefig(p, results_path*"Eta_preco.png");
