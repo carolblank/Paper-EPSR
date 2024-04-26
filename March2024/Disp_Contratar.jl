@@ -93,7 +93,7 @@ p = plot(X, Y,
         xlabel = "Contract Price (A+1)",
         ylabel = "Contracting Level",
         color=:blue,
-        linewidth = s_linewidth,)
+        linewidth = s_linewidth)
 
 
 
@@ -124,7 +124,7 @@ X = range_P
 Y = x_otimo_disp_RR
 
 p = plot!(X, Y, 
-        label = "Risk-Averse",
+        label = "Risk-Averse (λ = 0.5)",
         color = :gray,
         linewidth = s_linewidth,
         ls=:dash)
@@ -165,30 +165,59 @@ display(p)
 
 Plots.savefig(p, results_path*"Disp_Contratar.png");
 
+plot_cvau = plot(X, CVaRUp_Prop - CVaRUp_RR, 
+        label = "Risk-Averse",
+        xlabel = "Contract Price (A+1)",
+        ylabel = "CVAU",
+        color = :gray,
+        linewidth = s_linewidth,
+        ls=:dash
+);
+plot_cvau = plot!(X, CVaRUp_Prop, 
+        label = "Proposed approach",
+        xlabel = "Contract Price (A+1)",
+        ylabel = "CVAU",
+        color = :blue,
+        linewidth = s_linewidth
+);
+plot_cvau = plot!(X, CVaRUp_Prop - CVaRUp_Neutral, 
+        label = "Risk-Neutral",
+        color = :black,
+        linewidth = s_linewidth,
+        line=(:dot, 3)
+)
+
+
 Eta_RR = zeros(21)
+CVaRUp_Compared_RR = zeros(21)
 for i in 1:21
     Eta_RR[i] = (CVaRUp_Prop[i] - CVaRUp_RR[i])/(CVaR_Prop[i] - CVaR_RR[i])
 end
-
-p = plot(X, Eta_RR, 
-        label = "Risk-Averse",
+for i in 1:21
+    CVaRUp_Compared_RR[i] = (CVaRUp_Prop[i] - CVaRUp_RR[i])/CVaRUp_RR[i]
+end
+plot_eta = plot(X, Eta_RR, 
+        label = "Risk-Averse (λ = 0.5)",
         xlabel = "Contract Price (A+1)",
-        ylabel = "η",
+        ylabel = "η (Perfomance Indicator)",
         color = :gray,
         linewidth = s_linewidth,
-        ls=:dash)
+        ls=:dash
+)
 
 Eta_Neutral = zeros(21)
+CVaRUp_Compared_Neutral = zeros(21)
 for i in 1:21
     Eta_Neutral[i] = (CVaRUp_Prop[i] - CVaRUp_Neutral[i])/(CVaR_Prop[i] - CVaR_Neutral[i])
 end
-
-p = plot!(X, Eta_Neutral, 
+for i in 1:21
+    CVaRUp_Compared_Neutral[i] = (CVaRUp_Prop[i] - CVaRUp_Neutral[i])/CVaRUp_Neutral[i]
+end
+plot_eta = plot!(X, Eta_Neutral, 
         label = "Risk-Neutral",
-        xlabel = "Contract Price (A+1)",
-        ylabel = "η",
         color = :black,
         linewidth = s_linewidth,
-        line=(:dot, 3))
+        line=(:dot, 3)
+)
 
-Plots.savefig(p, results_path*"Eta_preco.png");
+Plots.savefig(plot_eta, results_path*"Eta_preco.png");
