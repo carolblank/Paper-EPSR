@@ -63,6 +63,7 @@ if J > 1
 end
 
 P           = ones(J, T);                # Vetor P
+#P           = ones(J, T).*115;                # Vetor P
 
 #a_Y         = 1.0;                      # Coeficiente angular p/ definição do preço
 a_Y         = 0.93;
