@@ -6,6 +6,8 @@ range_P = collect(0:10:200)
 x_otimo_disp_upside = zeros(length(range_P))
 CVaR_Prop = zeros(length(range_P))
 CVaRUp_Prop = zeros(length(range_P))
+CVaR_Prop_Test = zeros(length(range_P))
+CVaRUp_Prop_Test = zeros(length(range_P))
 
 for (iter,p_variavel) in enumerate(range_P)
 
@@ -83,6 +85,18 @@ for (iter,p_variavel) in enumerate(range_P)
         CVaR_Prop[iter]       = Statistics.mean(sort(R_otimo_proposto)[1:Int(round((1 - α) * S)), :]);
         CVaRUp_Prop[iter]      = Statistics.mean(sort(R_otimo_proposto)[Int(round((α) * S))+1:S,:]);
 
+
+        S_Test         = 800
+        R_teste_upside = zeros(S_Test)
+
+        for s in 1:S_Test
+                R_teste_upside[s] = sum(sum(gu[s+S, t, i] * GF[i] * PLD[s+S, t] * h[t] for i in 1:nI) 
+                                + sum((P[j, t] - PLD[s+S, t]) * Q[j, t] * x_novo[j] * h[t] for j in 1:J) for t in 1:T)./1e6;
+        end
+
+        CVaR_Prop_Test[iter]       = Statistics.mean(sort(R_teste_upside)[1:Int(round((1 - α) * S_Test)), :]);
+        CVaRUp_Prop_Test[iter]       = Statistics.mean(sort(R_teste_upside)[Int(round((α) * S_Test))+1:S_Test,:]);
+
 end
 
 Y = x_otimo_disp_upside
@@ -104,10 +118,14 @@ p = plot(X, Y,
 x_otimo_disp_RR = zeros(length(range_P))
 CVaR_RR = zeros(length(range_P))
 CVaRUp_RR = zeros(length(range_P))
+CVaR_RR_Test = zeros(length(range_P))
+CVaRUp_RR_Test = zeros(length(range_P))
 
 for (iter,p_variavel) in enumerate(range_P)
 
         P[1,:]     .= p_variavel
+        S_Test         = 800
+        R_teste_RR = zeros(S_Test)
 
         λ_ = 0.5
 
@@ -117,6 +135,14 @@ for (iter,p_variavel) in enumerate(range_P)
         x_otimo_disp_RR[iter] = xOptimal_RR[1]
         CVaR_RR[iter]             = Statistics.mean(sort(RPortTot_RR)[1:Int(round((1 - α) * S)), :])/pu_Money;
         CVaRUp_RR[iter]           = Statistics.mean(sort(RPortTot_RR)[Int(round((α) * S))+1:S, :])/pu_Money;
+
+        for s in 1:S_Test
+                R_teste_RR[s] = sum(sum(gu[s+S, t, i] * GF[i] * PLD[s+S, t] * h[t] for i in 1:nI) 
+                                + sum((P[j, t] - PLD[s+S, t]) * Q[j, t] * xOptimal_RR[j] * h[t] for j in 1:J) for t in 1:T);
+        end
+        
+        CVaR_RR_Test[iter]             = Statistics.mean(sort(R_teste_RR)[1:Int(round((1 - α) * S_Test)), :])/pu_Money;
+        CVaRUp_RR_Test[iter]           = Statistics.mean(sort(R_teste_RR)[Int(round((α) * S_Test))+1:S_Test, :])/pu_Money;
 
 end
 
@@ -135,12 +161,16 @@ p = plot!(X, Y,
 x_otimo_disp_Neutral = zeros(length(range_P))
 CVaR_Neutral = zeros(length(range_P))
 CVaRUp_Neutral = zeros(length(range_P))
+CVaR_Neutral_Test = zeros(length(range_P))
+CVaRUp_Neutral_Test = zeros(length(range_P))
 
 for (iter,p_variavel) in enumerate(range_P)
 
         P[1,:]     .= p_variavel
 
         λ_ = 0.0
+        S_Test         = 800
+        R_teste_Neutral = zeros(S_Test)
 
         global params = ParametrosContratacao(gu, GF, h, Q, PLD, α, T, λ_, flag_restricao, Rmin, P, S, q, nI, J, C, tx_m, xmin, xmax, ymin, ymax, Solv);
         Rdisp_Neutral, Rquant_Neutral, RPort_Neutral, RPortTot_Neutral, xOptimal_Neutral, yOptimal_Neutral = port_alloc(params);
@@ -148,6 +178,14 @@ for (iter,p_variavel) in enumerate(range_P)
         x_otimo_disp_Neutral[iter] = xOptimal_Neutral[1]
         CVaR_Neutral[iter]             = Statistics.mean(sort(RPortTot_Neutral)[1:Int(round((1 - α) * S)), :])/pu_Money;
         CVaRUp_Neutral[iter]           = Statistics.mean(sort(RPortTot_Neutral)[Int(round((α) * S))+1:S, :])/pu_Money;
+
+        for s in 1:S_Test
+                R_teste_Neutral[s] = sum(sum(gu[s+S, t, i] * GF[i] * PLD[s+S, t] * h[t] for i in 1:nI) 
+                                + sum((P[j, t] - PLD[s+S, t]) * Q[j, t] * xOptimal_Neutral[j] * h[t] for j in 1:J) for t in 1:T);
+        end
+        
+        CVaR_Neutral_Test[iter]             = Statistics.mean(sort(R_teste_Neutral)[1:Int(round((1 - α) * S_Test)), :])/pu_Money;
+        CVaRUp_Neutral_Test[iter]           = Statistics.mean(sort(R_teste_Neutral)[Int(round((α) * S_Test))+1:S_Test, :])/pu_Money;
 
 end
 
@@ -164,29 +202,6 @@ p = plot!(X,Y,
 display(p)
 
 Plots.savefig(p, results_path*"Disp_Contratar.png");
-
-plot_cvau = plot(X, CVaRUp_Prop - CVaRUp_RR, 
-        label = "Risk-Averse",
-        xlabel = "Contract Price (A+1)",
-        ylabel = "CVAU",
-        color = :gray,
-        linewidth = s_linewidth,
-        ls=:dash
-);
-plot_cvau = plot!(X, CVaRUp_Prop, 
-        label = "Proposed approach",
-        xlabel = "Contract Price (A+1)",
-        ylabel = "CVAU",
-        color = :blue,
-        linewidth = s_linewidth
-);
-plot_cvau = plot!(X, CVaRUp_Prop - CVaRUp_Neutral, 
-        label = "Risk-Neutral",
-        color = :black,
-        linewidth = s_linewidth,
-        line=(:dot, 3)
-)
-
 
 Eta_RR = zeros(21)
 CVaRUp_Compared_RR = zeros(21)
@@ -220,4 +235,33 @@ plot_eta = plot!(X, Eta_Neutral,
         line=(:dot, 3)
 )
 
-Plots.savefig(plot_eta, results_path*"Eta_preco.png");
+
+
+
+
+Eta_RR_Test = zeros(21)
+for i in 1:21
+    Eta_RR_Test[i] = (CVaRUp_Prop_Test[i] - CVaRUp_RR_Test[i])/(CVaR_Prop_Test[i] - CVaR_RR_Test[i])
+end
+plot_eta = plot(X, Eta_RR_Test, 
+        label = "Risk-Averse (λ = 0.5)",
+        xlabel = "Contract Price (A+1)",
+        ylabel = "η (Perfomance Indicator)",
+        color = :gray,
+        linewidth = s_linewidth,
+        ls=:dash
+)
+
+Eta_Neutral_Test = zeros(21)
+for i in 1:21
+    Eta_Neutral_Test[i] = (CVaRUp_Prop_Test[i] - CVaRUp_Neutral_Test[i])/(CVaR_Prop_Test[i] - CVaR_Neutral_Test[i])
+end
+plot_eta = plot!(X, Eta_Neutral_Test, 
+        label = "Risk-Neutral",
+        color = :black,
+        linewidth = s_linewidth,
+        line=(:dot, 3)
+)
+plot!(legend = :topleft)
+
+Plots.savefig(plot_eta, results_path*"Eta_preco_test.png");
