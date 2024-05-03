@@ -21,7 +21,6 @@ for (iter,p_variavel) in enumerate(range_P)
         cvar    = Statistics.mean(sort(R_total_otimo1)[1:Int(round((1 - α) * S)), :]);
         avg_adj = mean(R_total_otimo1);
         L = cvar/pu_Money;
-        #L = avg_adj/pu_Money;
         h_ = h./pu_Money;
 
         # ----------------------- SOLVING PROPOSED MODEL -------------------------------
@@ -107,7 +106,8 @@ p = plot(X, Y,
         xlabel = "Contract Price (A+1)",
         ylabel = "Contracting Level",
         color=:blue,
-        linewidth = s_linewidth)
+        linewidth = s_linewidth
+)
 
 
 
@@ -153,7 +153,8 @@ p = plot!(X, Y,
         label = "Risk-Averse (λ = 0.5)",
         color = :gray,
         linewidth = s_linewidth,
-        ls=:dash)
+        ls=:dash
+)
 
 
 # ----------------------------- Risk-neutral -------------------------------
@@ -197,21 +198,20 @@ p = plot!(X,Y,
         label = "Risk-Neutral",
         color = :black,
         linewidth = s_linewidth,
-        line=(:dot, 3))
+        line=(:dot, 3)
+)
 
 display(p)
 
-Plots.savefig(p, results_path*"Disp_Contratar.png");
+Plots.savefig(plot_eta, results_path*"Eta_preco.png");
 
 Eta_RR = zeros(21)
 CVaRUp_Compared_RR = zeros(21)
-for i in 1:21
-    Eta_RR[i] = (CVaRUp_Prop[i] - CVaRUp_RR[i])/(CVaR_Prop[i] - CVaR_RR[i])
-end
+Eta_RR = (CVaRUp_Prop - CVaRUp_RR) ./ (CVaR_Prop - CVaR_RR)
 for i in 1:21
     CVaRUp_Compared_RR[i] = (CVaRUp_Prop[i] - CVaRUp_RR[i])/CVaRUp_RR[i]
 end
-plot_eta = plot(X, Eta_RR, 
+plot_eta = plot(X[10:end], Eta_RR[10:end], 
         label = "Risk-Averse (λ = 0.5)",
         xlabel = "Contract Price (A+1)",
         ylabel = "η (Perfomance Indicator)",
@@ -228,7 +228,7 @@ end
 for i in 1:21
     CVaRUp_Compared_Neutral[i] = (CVaRUp_Prop[i] - CVaRUp_Neutral[i])/CVaRUp_Neutral[i]
 end
-plot_eta = plot!(X, Eta_Neutral, 
+plot_eta = plot!(X[10:end], Eta_Neutral[10:end], 
         label = "Risk-Neutral",
         color = :black,
         linewidth = s_linewidth,
@@ -239,29 +239,34 @@ plot_eta = plot!(X, Eta_Neutral,
 
 
 
-Eta_RR_Test = zeros(21)
-for i in 1:21
-    Eta_RR_Test[i] = (CVaRUp_Prop_Test[i] - CVaRUp_RR_Test[i])/(CVaR_Prop_Test[i] - CVaR_RR_Test[i])
+Eta_RR_Test = zeros(10)
+for i in 10:19
+    if CVaRUp_Prop_Test[i] - CVaRUp_RR_Test[i] < 10e-5
+        Eta_RR_Test[i-9] = 0
+    else
+        Eta_RR_Test[i-9] = (CVaRUp_Prop_Test[i] - CVaRUp_RR_Test[i])/(CVaR_Prop_Test[i] - CVaR_RR_Test[i])
+    end
 end
-plot_eta = plot(X, Eta_RR_Test, 
-        label = "Risk-Averse (λ = 0.5)",
-        xlabel = "Contract Price (A+1)",
-        ylabel = "η (Perfomance Indicator)",
-        color = :gray,
-        linewidth = s_linewidth,
-        ls=:dash
-)
+a = CVaRUp_Prop_Test[10:end-2] - CVaRUp_RR_Test[10:end-2] 
+b = CVaR_Prop_Test[10:end-2] - CVaR_RR_Test[10:end-2]
+
+Eta_Neutral_Test = zeros(10)
+for i in 10:19
+    Eta_Neutral_Test[i-9] = (CVaRUp_Prop_Test[i] - CVaRUp_Neutral_Test[i])/(CVaR_Prop_Test[i] - CVaR_Neutral_Test[i])
+end
+c = CVaRUp_Prop_Test[10:end-2] - CVaRUp_Neutral_Test[10:end-2]
+d = CVaR_Prop_Test[10:end-2] - CVaR_Neutral_Test[10:end-2]
+
+column_titles = ["90" ; "100" ; "110" ; "120" ; "130" ; "140" ; "150" ; "160" ; "170"; "180"]
+qMat    = [a b Eta_RR_Test c d Eta_Neutral_Test]';
+q_df    = DataFrame(qMat, :auto);
+q_df = DataFrame(qMat, Symbol.(column_titles))
+
+row_titles = ["CVaU Prop RR"; "CVaR Prop RR"; "Eta Prop RR"; "CVaU Prop Neutral"; "CVaR Prop Neutral"; "Eta Prop Neutral"]
+insertcols!(q_df, 1, "Métrica" => row_titles)
+
 
 Eta_Neutral_Test = zeros(21)
 for i in 1:21
     Eta_Neutral_Test[i] = (CVaRUp_Prop_Test[i] - CVaRUp_Neutral_Test[i])/(CVaR_Prop_Test[i] - CVaR_Neutral_Test[i])
 end
-plot_eta = plot!(X, Eta_Neutral_Test, 
-        label = "Risk-Neutral",
-        color = :black,
-        linewidth = s_linewidth,
-        line=(:dot, 3)
-)
-plot!(legend = :topleft)
-
-Plots.savefig(plot_eta, results_path*"Eta_preco_test.png");
