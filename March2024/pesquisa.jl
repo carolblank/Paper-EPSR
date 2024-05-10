@@ -322,7 +322,6 @@ println("\n\n\n");
 
 # ----------------------- Create DataFrames TESTE -------------------------------
 
-
 qMat_Test    = [Quant_RR_Test ; Quant_Prop_Test];
 AvgMat_Test  = [Avg_RR_Test ; Avg_Prop_Test];
 CVaRMat_Test = [CVaR_RR_Test ; CVaR_Prop_Test];
@@ -338,6 +337,7 @@ println(" --> Quantile Levels - out-of-sample <-- ");
 println("\n");
 print(q_df_Test);
 println("\n\n\n");
+
 
 # ----------------------- Indicador Risco-Upside -------------------------------
 
@@ -363,6 +363,42 @@ println("\n");
 print(df_Indicator);
 println("\n\n\n");
 
+
+# ----------------------- Diferença entre cenários -------------------------------
+
+sort(RPortTot_RR./1e6, dims = 2)
+sort(R_otimo_proposto)
+
+out_RProp = DataFrame(R_otimo_proposto,:auto);
+out_path = string()
+
+# pos_Neutral = 1
+# pos_Averse = 5
+# pos_VeryAverse = 7
+# positions = [pos_Neutral, pos_Averse, pos_VeryAverse]
+
+# Differences = zeros(3,1200)
+
+# for (iter, pos) in enumerate(positions)
+#     Differences[iter,:] = (R_otimo_proposto - RPortTot_RR[pos,:]./1e6)#./(RPortTot_RR[pos,:]./1e6);
+# end
+
+
+# Differences_sorted = sort(Differences, dims = 2);
+# Avg_diff = mean(Differences_sorted, dims = 2)
+# CVaR_diff = mean(Differences_sorted[:,1:Int(round(0.05*S))], dims = 2)
+# CVaU_diff = mean(Differences_sorted[:,Int(round(0.95*S)):S], dims = 2)
+# q_diff = zeros(3,3)
+# for (iter,q_) in enumerate([0.05, 0.5, 0.95])
+#     q_diff[:,iter] = Differences_sorted[:,Int(round(q_*S))]
+# end
+# row_titles = ["0.00" ; "0.50" ; "0.90" ]
+# column_titles = ["Avg", "CVaR", "CVaU", "0.05" , "0.50" , "0.95" ]
+
+# df_differences    = [Avg_diff CVaR_diff CVaU_diff q_diff];
+# df_differences    = DataFrame(df_differences, Symbol.(column_titles));
+# insertcols!(df_differences, 1, "λ" => row_titles)
+
 # ------------------------ CSV Resultados -------------------------------------
 
 xlsx_file_path = results_path*"Results_Stats.xlsx"
@@ -380,6 +416,9 @@ XLSX.openxlsx(xlsx_file_path, mode="w") do xf
 
     sheet_df_Indicator = XLSX.addsheet!(xf, "Indicator")
     XLSX.writetable!(sheet_df_Indicator, df_Indicator)
+
+    sheet_df_Diff = XLSX.addsheet!(xf, "Differences")
+    XLSX.writetable!(sheet_df_Diff, df_differences)
 
 end
 

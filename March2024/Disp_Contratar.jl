@@ -201,6 +201,8 @@ p = plot!(X,Y,
         line=(:dot, 3)
 )
 
+p = hline!()
+
 display(p)
 
 Plots.savefig(plot_eta, results_path*"Eta_preco.png");
@@ -211,13 +213,14 @@ Eta_RR = (CVaRUp_Prop - CVaRUp_RR) ./ (CVaR_Prop - CVaR_RR)
 for i in 1:21
     CVaRUp_Compared_RR[i] = (CVaRUp_Prop[i] - CVaRUp_RR[i])/CVaRUp_RR[i]
 end
-plot_eta = plot(X[10:end], Eta_RR[10:end], 
+plot_eta = plot!(X[10:end], Eta_RR[10:end], 
         label = "Risk-Averse (λ = 0.5)",
         xlabel = "Contract Price (A+1)",
         ylabel = "η (Perfomance Indicator)",
         color = :gray,
         linewidth = s_linewidth,
-        ls=:dash
+        ls=:dash,
+        xlims = (90,200)
 )
 
 Eta_Neutral = zeros(21)
@@ -235,7 +238,7 @@ plot_eta = plot!(X[10:end], Eta_Neutral[10:end],
         line=(:dot, 3)
 )
 
-
+hline([0], color = :lightpink, label = false, linewidth = 1.5)
 
 
 
